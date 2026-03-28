@@ -1,9 +1,7 @@
-import uuid
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.compat import UUID
 
 from app.db.base import Base
 
@@ -17,9 +15,9 @@ class UserProfile(Base):
 
     __tablename__ = "user_profiles"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("user_account.id"), nullable=True, index=True
     )
     subject_id: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)  # "SC003"
 

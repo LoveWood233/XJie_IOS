@@ -24,10 +24,26 @@ class Settings(BaseSettings):
     GEMINI_MODEL_VISION: str = "gemini-1.5-pro"
 
     JWT_SECRET: str = "change_me"
-    JWT_EXPIRES_MIN: int = 1440
+    JWT_EXPIRES_MIN: int = 1440  # Legacy compat
+    JWT_ACCESS_EXPIRES_MIN: int = 30
+    JWT_REFRESH_EXPIRES_DAYS: int = 7
 
-    CORS_ORIGINS: str = "http://localhost:5173"
+    # Rate limiting
+    LOGIN_RATE_LIMIT_PER_MIN: int = 10
+
+    CORS_ORIGINS: str = "http://localhost:5173,https://servicewechat.com"
     API_BASE_URL: str = "http://localhost:8000"
+
+    # CGM integration
+    CGM_PROVIDER_NAME: str = "vendor_cgm"
+    CGM_SHARED_SECRET: str | None = None
+    CGM_ALLOW_UNSIGNED: bool = True
+    CGM_DEVICE_TIMEZONE: str = "Asia/Shanghai"
+    CGM_SOURCE_NAME: str = "cgm_device_api"
+
+    # WeChat Mini Program
+    WX_APPID: str = ""
+    WX_SECRET: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

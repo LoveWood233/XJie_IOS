@@ -1,9 +1,8 @@
-import uuid
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.compat import JSONB, UUID
+from app.db.compat import JSONB
 
 from app.db.base import Base
 
@@ -17,9 +16,9 @@ class FeatureSnapshot(Base):
 
     __tablename__ = "feature_snapshots"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), index=True, nullable=False
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("user_account.id"), index=True, nullable=False
     )
     computed_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

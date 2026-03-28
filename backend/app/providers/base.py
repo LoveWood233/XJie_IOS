@@ -24,6 +24,8 @@ class ChatLLMResult(BaseModel):
     confidence: float = Field(ge=0, le=1)
     followups: list[str] = []
     safety_flags: list[str] = []
+    summary: str = ""
+    analysis: str = ""
 
 
 class LLMProvider(ABC):
@@ -36,9 +38,9 @@ class LLMProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def generate_text(self, context: dict, user_query: str) -> ChatLLMResult:
+    def generate_text(self, context: dict, user_query: str, *, history: list[dict] | None = None) -> ChatLLMResult:
         raise NotImplementedError
 
     @abstractmethod
-    def stream_text(self, context: dict, user_query: str) -> Iterator[str]:
+    def stream_text(self, context: dict, user_query: str, *, history: list[dict] | None = None) -> Iterator[str]:
         raise NotImplementedError

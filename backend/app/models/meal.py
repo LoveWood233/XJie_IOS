@@ -1,10 +1,9 @@
 import enum
-import uuid
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import BigInteger, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.compat import JSONB, UUID, StringArray
+from app.db.compat import JSONB, StringArray
 
 from app.db.base import Base
 
@@ -25,8 +24,8 @@ class MealTsSource(str, enum.Enum):
 class MealPhoto(Base):
     __tablename__ = "meal_photos"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True, nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user_account.id"), index=True, nullable=False)
     uploaded_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     image_object_key: Mapped[str] = mapped_column(String, nullable=False)
     exif_ts: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -40,8 +39,8 @@ class MealPhoto(Base):
 class Meal(Base):
     __tablename__ = "meals"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True, nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user_account.id"), index=True, nullable=False)
 
     meal_ts: Mapped[DateTime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
     meal_ts_source: Mapped[MealTsSource] = mapped_column(
@@ -54,7 +53,7 @@ class Meal(Base):
     tags: Mapped[list[str]] = mapped_column(StringArray(), default=list, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    photo_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("meal_photos.id"), nullable=True)
+    photo_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("meal_photos.id"), nullable=True)
 
 
 Index("ix_meals_user_ts", Meal.user_id, Meal.meal_ts)

@@ -32,7 +32,8 @@ def me(user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db
 
     return UserMeOut(
         id=str(user.id),
-        email=user.email,
+        phone=user.phone,
+        username=user.username,
         created_at=user.created_at,
         consent={
             "allow_ai_chat": consent.allow_ai_chat,

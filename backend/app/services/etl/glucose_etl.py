@@ -10,7 +10,6 @@ from __future__ import annotations
 import csv
 import logging
 import re
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
@@ -46,8 +45,9 @@ def _get_or_create_profile(db: Session, subject_id: str) -> UserProfile:
 
     # Create a placeholder auth-user so FK constraints are satisfied
     placeholder = User(
-        email=f"{subject_id.lower()}@study.local",
-        password_hash="!etl_placeholder",
+        phone=f"{subject_id.lower()}_etl",
+        username=subject_id,
+        password="!etl_placeholder",
     )
     db.add(placeholder)
     db.flush()  # get placeholder.id

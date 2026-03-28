@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -8,6 +9,8 @@ from app.models.symptom import Symptom
 from app.models.feature import FeatureSnapshot
 from app.models.user_profile import UserProfile
 from app.services.glucose_service import get_glucose_summary
+
+logger = logging.getLogger(__name__)
 
 
 def build_user_context(db: Session, user_id: str) -> dict:
@@ -31,6 +34,11 @@ def build_user_context(db: Session, user_id: str) -> dict:
     ).scalars().all()
 
     kcal_today = sum(m.kcal for m in meals) if meals else 0
+
+    profile_info = _get_profile_info(db, user_id)
+
+    # Build health report text for Liver subjects
+    health_report_text = _get_health_report_text(profile_info)
 
     return {
         "profile": {},
@@ -61,7 +69,8 @@ def build_user_context(db: Session, user_id: str) -> dict:
             "kcal_today": kcal_today,
         },
         "agent_features": _get_agent_features(db, user_id),
-        "user_profile_info": _get_profile_info(db, user_id),
+        "user_profile_info": profile_info,
+        "health_report_text": health_report_text,
     }
 
 
@@ -92,3 +101,23 @@ def _get_profile_info(db: Session, user_id: str) -> dict:
         "cohort": profile.cohort,
         "liver_risk_level": profile.liver_risk_level,
     }
+
+
+def _get_health_report_text(profile_info: dict) -> str:
+    """Build a text summary of health exam report data for the chat prompt.
+
+    Uses lazy import to avoid circular dependency with health_reports router.
+    """
+    sid = profile_info.get("subject_id", "")
+    cohort = profile_info.get("cohort", "")
+    if not sid or not sid.startswith("Liver"):
+        return ""
+    try:
+        from app.routers.health_reports import _build_report_data, _build_health_data_prompt
+        report = _build_report_data(sid, cohort, None)  # db not used for Liver XLS parsing
+        if not report.get("phases"):
+            return ""
+        return _build_health_data_prompt(report)
+    except Exception:
+        logger.warning("Failed to build health report text for chat context", exc_info=True)
+        return ""

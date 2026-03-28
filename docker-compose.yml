@@ -54,19 +54,6 @@ services:
       - db
       - redis
 
-  frontend:
-    build:
-      context: ./frontend
-    env_file:
-      - ./frontend/.env.example
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    ports:
-      - '5173:5173'
-    depends_on:
-      - backend
-
 volumes:
   db_data:
   minio_data:

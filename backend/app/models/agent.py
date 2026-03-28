@@ -1,10 +1,9 @@
 import enum
-import uuid
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, Integer, String, func
+from sqlalchemy import BigInteger, DateTime, Enum, Float, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.compat import JSONB, UUID
+from app.db.compat import JSONB
 
 from app.db.base import Base
 
@@ -41,9 +40,9 @@ class FeedbackChoice(str, enum.Enum):
 class AgentState(Base):
     __tablename__ = "agent_states"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), unique=True, index=True, nullable=False
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("user_account.id"), unique=True, index=True, nullable=False
     )
 
     current_goal: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
@@ -65,9 +64,9 @@ class AgentState(Base):
 class AgentAction(Base):
     __tablename__ = "agent_actions"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), index=True, nullable=False
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("user_account.id"), index=True, nullable=False
     )
     action_type: Mapped[ActionType] = mapped_column(Enum(ActionType), nullable=False)
     payload_version: Mapped[str] = mapped_column(String(16), default="1.0.0", nullable=False)
@@ -95,9 +94,9 @@ Index("ix_agent_actions_user_ts", AgentAction.user_id, AgentAction.created_ts)
 class OutcomeFeedback(Base):
     __tablename__ = "outcome_feedbacks"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    action_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("agent_actions.id"), index=True, nullable=False
+    id: Mapped[int] = mapped_column(primary_key=True)
+    action_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("agent_actions.id"), index=True, nullable=False
     )
     user_feedback: Mapped[FeedbackChoice | None] = mapped_column(Enum(FeedbackChoice), nullable=True)
     objective_outcome: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)

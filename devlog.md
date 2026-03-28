@@ -1,568 +1,368 @@
-# MetaboDash Agentic Service 蓝图（V0.1）
+# Xjie iOS 开发日志 (DevLog)
+
+> 项目：Xjie iOS App (SwiftUI)  
+> 起始日期：2026-03-24  
+> 源项目：微信小程序 → iOS 原生转换
 
 ---
 
-## 更新日志
+## 2026-03-26 — v0.6.0 P4+P5+P6 全部完成（39/39 ✅）
 
-### 2026-03-01 Phase 2 — devlog §11 三项改动实现（干预等级 / Payload 契约 / 设置页）
+### P4 网络健壮性 (NET-01 ~ NET-04) ✅
 
-> 完成时间：2026-03-01 03:40 CST
+**NET-01 网络状态监测**  
+新建 `Utils/NetworkMonitor.swift`：`NWPathMonitor` 封装，@Published `isConnected` / `connectionType`。  
+`XjieApp` 注入 `.environmentObject(networkMonitor)`，`MainTabView` 断网时显示全局 Banner（wifi.slash 图标 + "网络不可用"）。
 
-#### 概述
+**NET-02 请求重试策略**  
+`APIService.request()` 增加 `retryCount` 参数，URLError（超时/断网）及 5xx 自动重试最多 2 次，指数退避 1s → 2s。
 
-根据 devlog §11 新增改动，完成干预等级机制、AgentAction payload 契约校验、用户设置页（前后端）的全栈实现。所有组件通过集成烟雾测试，前端 TypeScript 编译零错误。
+**NET-03 离线缓存**  
+新建 `Utils/OfflineCacheManager.swift`：文件级 Codable 缓存（cachesDirectory/offline_cache/）。  
+`HomeViewModel` 成功时缓存、失败时读取缓存 + `isOfflineData` 标记。
 
-#### 新增 / 修改文件清单
+**NET-04 请求超时配置**  
+`URLRequest.timeoutInterval` = `APIConstants.requestTimeout`(15s) / `APIConstants.uploadTimeout`(60s)。
 
-| 文件 | 操作 | 说明 |
+### P5 代码质量 (CODE-01 ~ CODE-03) ✅
+
+**CODE-01 抽取重复代码**  
+- `Views/Shared/CSVTableView.swift` — ExamReportViews + MedicalRecordViews 共用 CSV 表格
+- `Views/Shared/DocumentTagView.swift` — SourceTag / StatusTag / SourceDetailTag / StatusDetailTag 4 组件
+- `Views/Shared/MetricItemView.swift` — HomeView + GlucoseView 共用指标卡片
+
+**CODE-02 魔法数字常量化**  
+新建 `Utils/Constants.swift`：`ChartConstants`（绘图参数）+ `APIConstants`（超时/分页）。  
+GlucoseView Canvas、MealsViewModel、ChatViewModel 全面引用。
+
+**CODE-03 移除/标记未使用代码**  
+OmicsView 硬编码数据标记 `// TODO: CODE-03`；HealthDataView emoji 替换为 SF Symbol `brain.head.profile`。
+
+### P6 生产就绪 (PROD-01 ~ PROD-06) ✅
+
+**PROD-01 结构化日志**  
+新建 `Utils/AppLogger.swift`：`os.Logger` 按 network/auth/data/ui 分类。APIService 关键路径已集成。
+
+**PROD-02 崩溃上报**  
+新建 `Utils/CrashReporter.swift`：`CrashReporting` 协议 + 默认实现（AppLogger 转发），可替换为 Crashlytics/Sentry。
+
+**PROD-03 国际化 (i18n)**  
+新建 `Resources/zh-Hans.lproj/Localizable.strings` + `Resources/en.lproj/Localizable.strings`（~150 键值对），覆盖标签栏、导航标题、通用文案。
+
+**PROD-04 隐私清单**  
+新建 `PrivacyInfo.xcprivacy`：声明健康信息 + 相册访问数据类型 + 文件时间戳 API 使用。
+
+**PROD-05 CI/CD**  
+新建 `.github/workflows/ci.yml`：GitHub Actions 自动构建 + 测试（macOS 15 + DerivedData 缓存）。
+
+**PROD-06 App Store 准备（文档阶段）**  
+隐私清单已就绪，i18n 基础已建立。应用图标/截图/描述待设计师介入。
+
+### 新增文件 (12)
+
+| 文件 | 用途 |
+|---|---|
+| `Utils/NetworkMonitor.swift` | NWPathMonitor 网络状态监测 |
+| `Utils/OfflineCacheManager.swift` | 文件级离线缓存管理器 |
+| `Utils/AppLogger.swift` | os.Logger 结构化日志 |
+| `Utils/CrashReporter.swift` | 崩溃上报协议 + 默认实现 |
+| `Utils/Constants.swift` | ChartConstants + APIConstants |
+| `Views/Shared/CSVTableView.swift` | 可复用 CSV 表格组件 |
+| `Views/Shared/DocumentTagView.swift` | 来源/状态标签组件 |
+| `Views/Shared/MetricItemView.swift` | 指标卡片组件 |
+| `PrivacyInfo.xcprivacy` | Apple 隐私清单 |
+| `Resources/zh-Hans.lproj/Localizable.strings` | 中文本地化 |
+| `Resources/en.lproj/Localizable.strings` | 英文本地化 |
+| `.github/workflows/ci.yml` | GitHub Actions CI |
+
+### 修改文件 (12)
+
+`APIService.swift`、`XjieApp.swift`、`MainTabView.swift`、`HomeViewModel.swift`、`ExamReportViews.swift`、`MedicalRecordViews.swift`、`HomeView.swift`、`GlucoseView.swift`、`OmicsView.swift`、`HealthDataView.swift`、`MealsViewModel.swift`、`ChatViewModel.swift`
+
+### 构建验证
+
+- **BUILD SUCCEEDED** — 52 Swift 源文件
+- **TEST SUCCEEDED** — 46 tests, 0 failures
+
+---
+
+## 2026-03-25 — v0.5.0 P3 性能优化完成
+
+### PERF-01 DateFormatter 缓存 ✅
+
+`Utils.swift` 顶层 `private let` 缓存 4 个 formatter（ISO8601 带/不带毫秒、yyyy-MM-dd HH:mm、HH:mm）。新增 `Utils.parseISO()` 统一入口。`HealthDataViewModel` / `MealsViewModel` / `GlucoseViewModel` 内联 formatter 同步替换。
+
+### PERF-02 血糖图表数据预处理 ✅
+
+`GlucoseViewModel` 新增 `chartData: [(Date, Double)]` 预计算属性，在 fetchPoints 成功后一次性解析。`GlucoseChartCanvas` 改为接收预计算数组，Canvas draw 闭包内零日期解析。
+
+### PERF-03 列表分页加载 ✅
+
+- `MealsViewModel`: pageSize=20 + offset 分页 + `loadMore()` + UI "加载更多"按钮
+- `ChatViewModel`: 会话列表 pageSize=20 + `loadMoreConversations()` + 历史面板加载更多
+
+### PERF-04 请求取消 (Task Cancellation) ✅
+
+- `GlucoseViewModel`: `pointsTask` 存储引用，切换窗口时 cancel + 重建 Task
+- 全部 ViewModel: await 后 `guard !Task.isCancelled else { return }` 守卫检查，页面消失后不更新 UI
+
+涉及 ViewModel: Home、Glucose、Chat、Meals、HealthBrief、HealthData、ExamReport、MedicalRecord、Settings
+
+### PERF-05 图片缓存（3 天 TTL）✅
+
+- 新建 `Utils/ImageCacheManager.swift`: NSCache 内存缓存（100 张 / 50 MB）+ 磁盘缓存
+- 3 天自动过期清理 `cleanExpired()` + `clearAll()` 公开方法
+- 新建 `Views/Components/CachedAsyncImage.swift`: SwiftUI 组件，缓存优先 → 网络兜底
+
+### 新增文件 (2)
+
+| 文件 | 用途 |
+|---|---|
+| `Utils/ImageCacheManager.swift` | 图片缓存管理器（3 天 TTL） |
+| `Views/Components/CachedAsyncImage.swift` | 带缓存的异步图片组件 |
+
+### 修改文件 (11)
+
+`Utils.swift`、`GlucoseViewModel.swift`、`GlucoseView.swift`、`HomeViewModel.swift`、`ChatViewModel.swift`、`ChatView.swift`、`MealsViewModel.swift`、`MealsView.swift`、`HealthBriefViewModel.swift`、`HealthDataViewModel.swift`、`ExamReportViewModels.swift`、`MedicalRecordViewModels.swift`、`SettingsViewModel.swift`
+
+### 构建验证
+
+- **BUILD SUCCEEDED** — 44 Swift 源文件
+- **TEST SUCCEEDED** — 46 tests, 0 failures
+
+---
+
+## 2026-03-25 — v0.4.0 P2 UI/UX 完善完成
+
+### UI-01 Dark Mode 全面适配 ✅
+
+`Theme.swift`: `appBackground` → `systemBackground`、`appCardBg` → `secondarySystemBackground`、`appText` → `label`、`appMuted` → `secondaryLabel`。`CardStyle` 暗色模式自动移除阴影。
+
+### UI-02 空状态页面 + UI-03 错误状态组件 ✅
+
+新建 `Views/Components/`:
+- `EmptyStateView.swift` — SF Symbol 图标 + 标题 + 副标题 + 可选操作按钮
+- `ErrorStateView.swift` — 自动识别网络/认证/服务器错误，展示不同图标和文案，带重试按钮
+
+已替换：HealthView、MealsView、ExamReportListView、MedicalRecordListView 的空状态
+
+### UI-04 Accessibility 无障碍 ✅
+
+30+ 硬编码 emoji 全部替换为 SF Symbols（`Image(systemName:)` / `Label(_:systemImage:)`）。所有可交互元素自动获得 VoiceOver 支持。
+
+涉及文件：HomeView、ChatView、HealthDataView、HealthView、MealsView、SettingsView、OmicsView、ExamReportViews、MedicalRecordViews
+
+### UI-05 弃用 API 替换 ✅
+
+- `LoginView`: `.autocapitalization(.none)` → `.textInputAutocapitalization(.never)`
+- `HealthDataView`: `UIDocumentPickerViewController(documentTypes:in:)` → `UTType` + `forOpeningContentTypes:`
+
+### UI-06 启动画面 ✅
+
+- Info.plist 添加 `UILaunchScreen` 配置
+- 新建 `SplashView.swift`：品牌渐变背景 + Logo + 渐入缩放动画 (1.5s)
+- `XjieApp.swift` 集成 ZStack 叠加 splash
+
+### UI-07 iPad 自适应布局 ✅
+
+`MainTabView` 使用 `@Environment(\.horizontalSizeClass)` 判断:
+- iPhone (compact) → 保持 TabView
+- iPad (regular) → NavigationSplitView + 侧边栏导航
+
+### 新增文件 (3)
+
+| 文件 | 用途 |
+|---|---|
+| `Views/Components/EmptyStateView.swift` | 通用空状态组件 |
+| `Views/Components/ErrorStateView.swift` | 通用错误状态组件 |
+| `Views/Components/SplashView.swift` | 启动品牌画面 |
+
+### 修改文件 (13)
+
+`Theme.swift`、`Info.plist`、`XjieApp.swift`、`MainTabView.swift`、`HomeView.swift`、`LoginView.swift`、`ChatView.swift`、`HealthDataView.swift`、`HealthView.swift`、`MealsView.swift`、`SettingsView.swift`、`OmicsView.swift`、`ExamReportViews.swift`、`MedicalRecordViews.swift`
+
+### 构建验证
+
+- **BUILD SUCCEEDED** — 42 Swift 源文件
+- **TEST SUCCEEDED** — 46 tests, 0 failures
+
+---
+
+## 2026-03-25 — v0.2.0 P0 + P1 安全/架构重构完成
+
+### 一、P0 安全与稳定性（全部完成 ✅）
+
+| 编号 | 任务 | 状态 |
 |---|---|---|
-| `backend/app/core/intervention.py` | 新增 | InterventionLevel 枚举、RiskLevel 枚举、TriggerStrategy 数据类、STRATEGIES 参数表、`classify_risk()` / `get_strategy()` |
-| `backend/app/models/user_settings.py` | 新增 | UserSettings 模型（intervention_level、daily_reminder_limit、allow_auto_escalation） |
-| `backend/app/models/agent.py` | 修改 | AgentAction 新增 5 字段：payload_version、status（ActionStatus 枚举）、priority、error_code、trace_id |
-| `backend/app/models/__init__.py` | 修改 | 导出 UserSettings |
-| `backend/app/services/payload_schemas.py` | 新增 | 4 种 action_type 的 JSON Schema 定义（pre_meal_sim / rescue / daily_plan / weekly_goal），SCHEMA_REGISTRY 注册表 |
-| `backend/app/services/payload_validator.py` | 新增 | `validate_payload()` — 校验 + 降级 + 安全回退；ValidationResult 数据类；trace_id 生成 |
-| `backend/app/schemas/settings.py` | 新增 | UserSettingsOut（含 InterventionStrategyOut）、UserSettingsUpdate |
-| `backend/app/schemas/user.py` | 修改 | UserMeOut 增加 `settings` 字段 |
-| `backend/app/routers/users.py` | 修改 | 新增 GET/PATCH `/api/users/settings`；`/api/users/me` 返回 settings |
-| `backend/app/db/migrations/versions/0003_intervention_levels.py` | 新增 | user_settings 表 + agent_actions 5 列 + actionstatus 枚举 |
-| `backend/app/db/migrations/env.py` | 修改 | 导入 user_settings 模块 |
-| `backend/pyproject.toml` | 修改 | 新增 `jsonschema>=4.21` 依赖 |
-| `frontend/src/api/types.ts` | 修改 | 新增 UserSettings、InterventionStrategy 类型 |
-| `frontend/src/api/hooks.ts` | 修改 | 新增 `useSettings()` / `useUpdateSettings()` hooks |
-| `frontend/src/pages/SettingsPage.tsx` | 重写 | 干预等级三列选择卡片 + 提醒偏好 + 自动升级开关 + 原有隐私设置 |
+| SEC-01 | Token 迁移至 Keychain | ✅ `AuthManager` 全面改用 `KeychainHelper` |
+| SEC-02 | 移除所有强制解包 (`!`) | ✅ `APIService`、`MealsViewModel` 中 URL/Response 均用 guard let |
+| SEC-03 | BaseURL 环境配置 | ✅ `Environment.swift` — Info.plist 或 DEBUG fallback |
+| SEC-04 | URL 参数安全构建 | ✅ `URLBuilder` 枚举 + `URLComponents`/`URLQueryItem` |
+| ERR-01 | 清除空 catch 块 | ✅ 所有 ViewModel 增加 `@Published var errorMessage`，View 层 `.alert` 展示 |
+| ERR-02 | Token 刷新并发竞态修复 | ✅ `refreshTask: Task<Void, Error>?` 排队机制 |
+| BUG-01 | ChatMessage.id 存储属性 | ✅ `let id: String` + 自定义 `init(from decoder:)` |
 
-#### 关键设计决策
+### 二、P1 架构与可测试性（核心完成 ✅）
 
-1. **校验失败策略**：拦截 + 日志 + 安全回退（不下发无效 payload，生成中文安全文案替代）
-2. **三态模型**：payload 校验结果分 `valid` / `degraded` / `invalid`，均记录 trace_id 可追溯
-3. **懒创建 UserSettings**：首次访问设置 API 时自动创建默认 L2 记录，无需注册流程改动
-4. **等级切换即时生效**：PATCH 后前端 invalidate settings + me 两个 query
-
-#### 验证结果
-
-- 干预等级 L1/L2/L3 策略参数解析 ✅
-- 风险分类 low/medium/high ✅
-- 4 种 action_type Schema 注册 ✅
-- 有效 payload 校验通过（status=valid）✅
-- 无效 payload 降级回退（status=degraded，中文安全文案）✅
-- 未知 schema 拒绝（status=invalid，SCHEMA_NOT_FOUND）✅
-- Settings API 路由注册（2 条）✅
-- 前端 TypeScript 编译零错误 ✅
-
----
-
-### 2026-03-01 Phase 1 — 数据管线 ETL 全栈实现
-
-> 完成时间：2026-03-01 02:00 CST
-
-#### 概述
-
-构建完整的数据导入管线（ETL），覆盖血糖 CGM 数据（65 个 Clarity CSV → 151,097 条读数）、膳食数据（activity_food.csv + index_corrected_oncurve.csv → 2,160 条校正事件）、特征工程（TIR/CV/AUC/餐后响应斜率等，按 24h/7d/28d 窗口计算）。
-
-#### 新增 / 修改文件清单
-
-| 文件 | 操作 | 说明 |
+| 编号 | 任务 | 状态 |
 |---|---|---|
-| `backend/app/models/user_profile.py` | 新增 | UserProfile 模型（subject_id、人口统计学、cohort） |
-| `backend/app/models/feature.py` | 新增 | FeatureSnapshot 模型（user_id、window、features JSONB） |
-| `backend/app/models/agent.py` | 新增 | AgentState、AgentAction、OutcomeFeedback 模型 |
-| `backend/app/models/__init__.py` | 修改 | 导出所有新模型 |
-| `backend/app/services/etl/__init__.py` | 新增 | ETL 包初始化 |
-| `backend/app/services/etl/glucose_etl.py` | 新增 | Clarity CSV 解析、mmol/L→mg/dL 转换、按 subject 去重入库 |
-| `backend/app/services/etl/meal_etl.py` | 新增 | activity_food.csv + index_corrected_oncurve.csv 导入、时间格式兼容 |
-| `backend/app/services/etl/feature_compute.py` | 新增 | 多窗口特征计算（TIR/CV/夜间变异/AUC/餐后响应斜率） |
-| `backend/app/schemas/etl.py` | 新增 | ETLRunResponse、FeatureSnapshotOut |
-| `backend/app/routers/etl.py` | 新增 | POST /api/etl/run-batch、GET /api/etl/features/{subject_id}、POST /api/etl/features/recompute、GET /api/etl/subjects |
-| `backend/app/db/migrations/versions/0002_agentic.py` | 新增 | user_profiles、agent_states、agent_actions、outcome_feedbacks、feature_snapshots 表 |
-| `backend/app/db/migrations/env.py` | 修改 | 导入新模型模块 |
-| `backend/app/core/config.py` | 修改 | 新增 DATA_DIR 配置项 |
-| `backend/app/main.py` | 修改 | 注册 ETL 路由 |
-| `backend/pyproject.toml` | 修改 | 新增 `numpy>=1.26` 依赖 |
-
-#### 数据概况
-
-| 数据源 | 文件数 | 记录数 | 受试者 |
-|---|---|---|---|
-| Clarity CGM CSV | 65 | 151,097 EGV | 63 unique SC subjects |
-| activity_food.csv | 1 | ~12,000 raw | — |
-| index_corrected_oncurve.csv | 1 | 2,160 filtered | — |
-| 脂肪肝数据 | 105 (Excel/PDF) | 25 Liver-xxx | 独立队列，暂不接入 |
-
-#### 验证结果
-
-- 65 CSV 全部解析成功，151,097 条 EGV 读数 ✅
-- 63 unique subject 识别 ✅
-- 2,160 条校正餐事件导入 ✅
-- 特征计算 TIR/CV/AUC 正确 ✅
-- 4 个 ETL API 路由注册 ✅
-- FastAPI 共 33 条路由正常 ✅
+| ARCH-01 | APIServiceProtocol 协议层 | ✅ `Services/APIServiceProtocol.swift` |
+| ARCH-02 | ViewModel 依赖注入 | ✅ 所有 ViewModel 接收 `api: APIServiceProtocol` 参数 |
+| ARCH-03 | ViewModel 从 View 拆分 | ✅ 10 个 ViewModel 独立至 `ViewModels/` 目录 |
+| ARCH-04 | Models.swift 按 feature 拆分 | ✅ 6 个模型文件：Auth/Glucose/Meal/Health/Chat/Settings |
+| ARCH-05 | Repository 层抽取 | ✅ `Repositories/HealthDataRepository.swift` |
+| TEST-01 | 核心单元测试 | ✅ MockAPIService + Utils(22) + ChatMessage BUG-01 回归(4) |
+| TEST-02 | ViewModel 单元测试 | ✅ Home(3) + Login(8) + Chat(6) + Glucose(3) = 20 tests |
 
 ---
 
-## 11. V0.1 新增改动（2026-03-01）
+## 2026-03-25 — v0.3.0 单元测试全覆盖
 
-> 本节为新增内容，前文保持不变。
-> 改动日期：2026-03-01（Asia/Shanghai）
+### 测试目标建立
 
-### 11.1 干预等级机制（Intervention Levels）
+- 新建 `XjieTests/` target（unit-test bundle，hosted in Xjie.app）
+- xcscheme 更新 TestAction 引用
 
-为解决触发策略不够具体的问题，新增用户可选干预等级。干预等级不是文案差异，而是规则参数差异。
+### 测试文件（7 个）
 
-#### Level 定义
+| 文件 | 测试数 | 覆盖内容 |
+|---|---|---|
+| MockAPIService.swift | — | 测试替身，符合 APIServiceProtocol |
+| UtilsTests.swift | 22 | formatDate/formatTime/toFixed/glucoseColor/URLBuilder/MIMETypeHelper |
+| ChatMessageTests.swift | 4 | BUG-01 回归：id decode/生成/稳定性 |
+| HomeViewModelTests.swift | 3 | fetchData 成功/失败/loading |
+| LoginViewModelTests.swift | 8 | 输入验证(3) + 登录成功(2) + 网络错误 + subjects 加载(2) |
+| ChatViewModelTests.swift | 6 | 发消息/空消息/错误/新对话/历史加载 |
+| GlucoseViewModelTests.swift | 3 | fetchRange/error/窗口切换 |
 
-1. `L1 温和`：低打扰，适合新用户或不希望被频繁提醒的用户。
-2. `L2 标准`：默认等级，平衡提醒频率与效果。
-3. `L3 积极`：高敏感触发，适合短期强化管理。
+**合计：46 tests, 0 failures ✅**
 
-#### 触发策略参数表
+### 附带修复
 
-| 维度 | L1 温和 | L2 标准 | L3 积极 |
-|---|---|---|---|
-| 风险触发门槛 | 高风险才触发 | 中高风险触发 | 中风险以上触发 |
-| 每日主动提醒上限 | 1 次 | 2 次 | 4 次 |
-| 单餐最多提醒 | 1 次 | 2 次 | 3 次 |
-| 建议动作数 | 1 条 | 1-2 条 | 2-3 条 |
-| 是否要求复盘 | 可选 | 建议复盘 | 默认复盘 |
-| 连续异常升级 | 不自动升级 | 连续 2 天可升级 | 连续 1 天可升级 |
+- 4 个 Model 文件 `Decodable` → `Codable`（MockAPIService 编码需要）
+- ChatMessage 添加 memberwise `init(id:role:content:)`
 
-#### 风险分层建议（可配置）
+### 三、新增文件清单（v0.2.0）
 
-1. `low`：风险分 < 0.40
-2. `medium`：0.40 <= 风险分 < 0.70
-3. `high`：风险分 >= 0.70
+**Utils (2)**：`KeychainHelper.swift`、`MIMETypeHelper.swift`  
+**Services (2)**：`Environment.swift`、`APIServiceProtocol.swift`  
+**Models (6)**：`AuthModels.swift`、`GlucoseModels.swift`、`MealModels.swift`、`HealthModels.swift`、`ChatModels.swift`、`SettingsModels.swift`  
+**Repositories (1)**：`HealthDataRepository.swift`  
+**ViewModels (10)**：`HomeViewModel.swift`、`LoginViewModel.swift`、`GlucoseViewModel.swift`、`ChatViewModel.swift`、`HealthDataViewModel.swift`、`MedicalRecordViewModels.swift`、`ExamReportViewModels.swift`、`SettingsViewModel.swift`、`HealthBriefViewModel.swift`、`MealsViewModel.swift`
 
-#### 默认策略
+### 四、重写文件
 
-1. 新用户默认 `L2`
-2. 用户可在设置页随时手动切换
-3. 系统只建议升级，不自动改用户等级（除非用户授权自动策略）
+- **AuthManager.swift**：全面 Keychain 存储
+- **APIService.swift**：协议一致性、安全 URL、并发刷新
+- **Models.swift**：内容拆分至 6 文件（保留空壳兼容）
+- **Utils.swift**：新增 URLBuilder
+- **10 个 View 文件**：移除内嵌 ViewModel、统一错误提示
 
-### 11.2 AgentAction 接口契约（Payload Schema + Versioning）
+### 五、LLM API 占位
 
-为解决“行动接口没落到契约级别”的问题，新增 `AgentAction.payload` 标准结构与版本机制，避免自由文本导致前后端不稳定。
+以下位置标记了 `// TODO: [LLM API]`，等后端接口就绪后接入：
+- `ChatViewModel.swift` — 对话请求/流式回复
+- `HealthDataViewModel.swift` — AI 健康数据总结
+- `HealthBriefViewModel.swift` — AI 摘要生成
 
-#### 11.2.1 AgentAction 通用结构
+### 六、编译验证
 
-```json
-{
-  "action_id": "act_20260301_0001",
-  "user_id": "SC003",
-  "action_type": "post_meal_rescue",
-  "payload_version": "1.0.0",
-  "created_ts": "2026-03-01T10:05:00+08:00",
-  "priority": "medium",
-  "payload": {},
-  "reason_evidence": {
-    "window": "last_14d",
-    "signals": ["predicted_peak_high", "rapid_rise_30min"],
-    "summary": "近14天晚餐后峰值偏高，本次上升速率超过个人阈值"
-  }
-}
+- **构建结果**：`BUILD SUCCEEDED` ✅（iPhone 17 Simulator, iOS 26.3.1）
+- **39 个 Swift 源文件**
+- **仅 1 个 deprecation warning**：`UIDocumentPickerViewController(documentTypes:)` — 计划在 UI-05 中更新
+
+---
+
+## 2026-03-24 — v0.1.0 初始转换完成
+
+### 一、项目创建
+
+从微信小程序（WXML + WXSS + JS）完整转换为 iOS 原生 SwiftUI 应用，保留全部架构和业务逻辑。
+
+**转换映射**：
+
+| 微信小程序 | iOS (SwiftUI) |
+|---|---|
+| `app.js globalData` | `AuthManager` @MainActor 单例 |
+| `utils/api.js` (wx.request) | `APIService` actor (URLSession async/await) |
+| `Page({data, onLoad, methods})` | SwiftUI View + @MainActor ViewModel (ObservableObject) |
+| `tabBar` 4 标签 | `TabView` (首页/健康数据/多组学/AI助手) |
+| Canvas 2D | SwiftUI `Canvas` + `GraphicsContext` |
+| `wx.setStorageSync/getStorageSync` | `UserDefaults` |
+| `wx.chooseMedia` | `PhotosPicker` (PhotosUI) |
+| `wx.chooseMessageFile` | `UIDocumentPickerViewController` (UIViewControllerRepresentable) |
+| `wx.showModal` (editable) | `.alert` + TextField |
+| `wx.showActionSheet` | `.confirmationDialog` |
+
+### 二、项目结构
+
+```
+Xjie/
+├── Xjie.xcodeproj/          # Xcode 工程 + scheme
+├── Xjie/
+│   ├── App/
+│   │   └── XjieApp.swift    # @main 入口，auth 路由
+│   ├── Models/
+│   │   └── Models.swift           # 30+ Codable 数据模型
+│   ├── Services/
+│   │   ├── AuthManager.swift      # 认证状态管理
+│   │   └── APIService.swift       # HTTP 客户端 (JWT + 401 自动刷新)
+│   ├── Utils/
+│   │   ├── Theme.swift            # 颜色系统 + CardStyle
+│   │   └── Utils.swift            # 日期格式化、血糖颜色
+│   ├── Views/
+│   │   ├── Home/                  # 首页仪表盘 + TabView
+│   │   ├── Login/                 # 登录（Subject/Email 双模式）
+│   │   ├── Glucose/               # 血糖曲线图（Canvas 绘制）
+│   │   ├── Chat/                  # AI 对话（历史会话 + 追问建议）
+│   │   ├── HealthData/            # 健康数据中心（AI 总结 + 上传）
+│   │   ├── MedicalRecords/        # 病历列表 + 详情
+│   │   ├── ExamReports/           # 体检报告列表 + 详情
+│   │   ├── Omics/                 # 多组学（蛋白/代谢/基因）
+│   │   ├── Health/                # 每日健康简报
+│   │   ├── Meals/                 # 膳食记录（拍照 + 手动）
+│   │   └── Settings/              # 设置（干预等级/同意书/登出）
+│   ├── Assets.xcassets/           # 图标 + 主题色
+│   ├── Preview Content/
+│   └── Info.plist                 # ATS localhost 例外
 ```
 
-#### 11.2.2 各动作类型 payload 要求
-
-##### A. `pre_meal_sim`
-
-```json
-{
-  "title": "吃前预演",
-  "meal_input": {"kcal": 650, "meal_time": "2026-03-01T12:30:00+08:00"},
-  "prediction": {
-    "peak_glucose": 9.6,
-    "time_to_peak_min": 65,
-    "auc_0_120": 180.2,
-    "liver_load_score": 0.72
-  },
-  "alternatives": [
-    {"id": "alt_reduce_carb", "label": "主食减少20%", "expected_delta_peak": -0.6},
-    {"id": "alt_delay_30m", "label": "延后30分钟进食", "expected_delta_peak": -0.3}
-  ]
-}
-```
-
-##### B. `post_meal_rescue`
-
-```json
-{
-  "title": "吃后补救",
-  "risk_level": "high",
-  "trigger_evidence": ["slope_30min_high", "predicted_peak_over_threshold"],
-  "steps": [
-    {"id": "walk_12m", "label": "现在步行12分钟", "duration_min": 12},
-    {"id": "hydrate", "label": "饮水300ml"}
-  ],
-  "expected_effect": {"delta_peak_low": 0.3, "delta_peak_high": 0.8},
-  "followup": {"checkpoints_min": [30, 60, 120]},
-  "expires_at": "2026-03-01T14:30:00+08:00"
-}
-```
-
-##### C. `daily_plan`
-
-```json
-{
-  "title": "今日代谢天气",
-  "risk_windows": [
-    {"start": "12:00", "end": "14:00", "risk": "medium"},
-    {"start": "19:00", "end": "21:30", "risk": "high"}
-  ],
-  "today_goals": [
-    "晚餐后10分钟内开始步行",
-    "今日最后一餐热量控制在600kcal以内"
-  ]
-}
-```
-
-##### D. `weekly_goal`
-
-```json
-{
-  "title": "周目标",
-  "focus": "降低晚餐后峰值",
-  "target": {
-    "metric": "post_dinner_delta_peak",
-    "baseline": 3.2,
-    "goal": 2.6,
-    "unit": "mmol/L",
-    "window_days": 7
-  },
-  "tasks": [
-    "晚餐主食减20%",
-    "晚餐后步行15分钟（>=4天）"
-  ]
-}
-```
-
-#### 11.2.3 版本控制规则
-
-1. `payload_version` 使用语义化版本（SemVer）：`MAJOR.MINOR.PATCH`
-2. `PATCH`：仅修正文案/可选字段，不影响兼容
-3. `MINOR`：新增向后兼容字段
-4. `MAJOR`：字段含义或必填项变化，不向后兼容
-5. 前端按 `action_type + payload_version` 路由解析器
-6. 后端保留旧版本解析至少 2 个小版本周期
-
-#### 11.2.4 校验与审计要求
-
-1. 所有 `AgentAction.payload` 在入库前做 JSON Schema 校验
-2. 校验失败不得下发给用户，需记录 `error_code + trace_id`
-3. 每条动作必须可回放：`action_id` 可定位原始 payload 与 reason_evidence
-
-### 11.3 设置页新增项（用户可见）
-
-1. 干预等级选择：`L1/L2/L3`
-2. 每日提醒上限可调（在等级上限内）
-3. 是否允许“连续异常自动建议升级”
-
-### 11.4 验收标准新增
-
-1. 100% 动作卡符合 `payload schema`
-2. 100% 动作记录包含 `payload_version`
-3. 干预等级切换后 5 分钟内生效
-4. 触发日志可追溯到具体阈值与证据信号
-
-
-
-## 1. 项目目标（为什么做）
-
-### 1.1 产品目标
-将现有“工具型健康面板”升级为“代理型健康服务（Agentic Service）”，让用户感知到：
-
-1. 系统能主动观察并发现问题（不是等用户来问）
-2. 系统能在关键时刻给可执行建议（不是泛泛而谈）
-3. 系统能追踪建议是否有效并自动调整（形成闭环）
-
-### 1.2 用户体验目标
-用户在功能上应明显感受到 4 种“智能体验”：
-
-1. 吃前预判：还没吃就能知道对血糖/肝脏负担的影响
-2. 吃后补救：出现高风险趋势时给实时可执行动作
-3. 日内编排：每天自动给出高风险时段与行动窗口
-4. 周度教练：自动复盘并形成下周个体化目标
-
-### 1.3 业务目标（可量化）
-
-1. 餐后 2h 峰值（Delta Peak）下降
-2. AUC（餐后负担）下降
-3. TIR（70-180）提升
-4. 建议采纳率、完成率提升
-
----
-
-## 2. 核心功能设计（让用户“体会到”agentic）
-
-## 2.1 功能 A：吃前预演（Pre-Meal Simulator）
-
-**用户动作**：输入/选择即将吃的食物（或热量）+ 时间
-
-**系统输出**：
-
-1. 预计 2h 血糖响应曲线（峰值、到峰时间）
-2. 预计肝脏负担分（Liver Load）
-3. 最小改动替代方案（例如：延后 30 分钟、减少 20% 主食、先走 10 分钟）
-
-**体验价值**：用户感知“系统能提前思考并给选择空间”。
-
-## 2.2 功能 B：吃后补救（Post-Meal Rescue）
-
-**触发条件**：检测到餐后快速上升/超阈趋势
-
-**系统输出**：
-
-1. 实时补救动作卡（步行时长、补水、下一餐控制建议）
-2. 预计可降低的峰值区间（透明说明不确定性）
-3. 30/60/120 分钟追踪提醒与复盘
-
-**体验价值**：用户感知“系统在关键时刻接管问题处理”。
-
-## 2.3 功能 C：今日代谢天气（Daily Metabolic Weather）
-
-**系统每日自动生成**：
-
-1. 今日高风险时段（按用户历史模式）
-2. 今日建议餐窗与运动窗口
-3. 今日优先目标（仅 1-2 条，避免干扰）
-
-**体验价值**：用户感知“系统在替我安排，而非只展示历史图”。
-
-## 2.4 功能 D：周目标代理（Weekly Goal Agent）
-
-**系统每周自动生成**：
-
-1. 上周问题模式（如：晚餐后高峰、夜间波动）
-2. 下周个体化目标（可执行、可验证）
-3. 目标完成进度 + 效果证据
-
-**体验价值**：用户感知“系统懂我，并会持续学习我的反馈”。
-
-## 2.5 功能 E：证据解释层（Explainability Layer）
-
-每条建议必须附带“证据句”：
-
-- 基于哪些数据窗口（例如最近 14 天）
-- 触发该建议的核心指标是什么
-- 该建议预期改变哪项指标
-
-**体验价值**：提高信任，减少“AI 瞎猜”的感觉。
-
----
-
-## 3. 分阶段计划（Plan）
-
-## 3.1 Phase 1（1-2 周）：Agentic MVP
-
-1. 接入吃前预演 + 吃后补救双核心功能
-2. 提供每日代谢天气卡片
-3. 形成建议日志与结果日志
-
-**交付物**：可运行 Web Demo、最小闭环数据流、基础评估指标
-
-## 3.2 Phase 2（3-4 周）：个体化强化
-
-1. 按用户历史学习“时段风险”与“热量-响应斜率”
-2. 引入周目标代理与周报
-3. 加入建议效果自动复盘
-
-**交付物**：用户级策略参数、周度目标闭环
-
-## 3.3 Phase 3（5-8 周）：服务化与扩展
-
-1. 多代理协作（数据质检代理、策略代理、教练代理、复盘代理）
-2. 实时触发与优先级调度
-3. A/B 验证建议策略
-
-**交付物**：Agent Runtime、运营控制台、策略实验框架
-
----
-
-## 4. 需要用到的数据（Data Requirements）
-
-## 4.1 现有数据源（V0）
-
-1. `data/glucose/*.csv`
-2. `data/activity_food.csv`
-3. `data/index.csv`
-4. `data/index_corrected.csv`
-5. `data/index_corrected_oncurve.csv`
-6. `fatty_liver_data_raw/`（初始/监测/结束阶段体检文件）
-
-## 4.2 数据职责分工
-
-1. `glucose`：实时状态与餐后响应核心依据
-2. `food/index`：行为输入与餐次锚点
-3. `fatty_liver`：长期代谢背景与分层管理先验
-
----
-
-## 5. 数据结构设计（Data Structures）
-
-## 5.1 核心实体
-
-### A. `UserProfile`
-
-- `user_id` (SCxxx)
-- `sex`
-- `age`
-- `height_cm`
-- `weight_kg`
-- `liver_risk_level`（由体检抽取得到）
-- `consent_flags`
-
-### B. `GlucosePoint`
-
-- `user_id`
-- `ts`
-- `glucose_mmol_l`
-- `source`
-- `quality_flag`
-
-### C. `MealEvent`
-
-- `meal_id`
-- `user_id`
-- `meal_ts_raw`
-- `meal_ts_corrected`
-- `kcal`
-- `confidence`
-- `data_source`
-
-### D. `LiverExamRecord`
-
-- `exam_id`
-- `user_id`（若无法直接映射，先存匿名 cohort_id）
-- `stage`（initial / monitor / final）
-- `exam_date`
-- `indicators`（ALT、AST、TG、影像结论等）
-- `risk_score`
-
-### E. `AgentState`
-
-- `user_id`
-- `current_goal`
-- `risk_windows_today`
-- `active_plan`
-- `last_replan_ts`
-- `state_version`
-
-### F. `AgentAction`
-
-- `action_id`
-- `user_id`
-- `action_type`（pre_meal_sim / rescue / daily_plan / weekly_goal）
-- `payload_version`（SemVer）
-- `payload`
-- `status`（valid / degraded / invalid）
-- `priority`（low / medium / high）
-- `reason_evidence`
-- `error_code`（nullable）
-- `trace_id`（nullable）
-- `created_ts`
-
-### G. `OutcomeFeedback`
-
-- `action_id`
-- `user_feedback`（执行/未执行/部分执行）
-- `objective_outcome`（峰值变化、AUC变化）
-- `closed_loop_score`
-
-## 5.2 特征层（Feature Store）
-
-### 短期特征（24h-7d）
-
-- `tir_24h`, `tir_7d`
-- `cv_24h`
-- `last_meal_delta_peak`
-- `rolling_auc_7d`
-- `night_variability`
-
-### 长期特征（28d+）
-
-- `meal_time_sensitivity`（不同时段响应差异）
-- `kcal_response_slope`（热量对峰值/AUC斜率）
-- `adherence_rate`
-- `liver_risk_trend`
-
----
-
-## 6. 数据意义与作用（Why each data matters）
-
-## 6.1 血糖时序数据的意义
-
-1. 用于检测“现在是否正在恶化”
-2. 用于评估“建议是否真正有效”
-3. 是所有代理决策的实时主信号
-
-## 6.2 饮食事件数据的意义
-
-1. 定义干预起点（餐前/餐后）
-2. 连接行为与结果（吃了什么 -> 曲线怎么变）
-3. 形成个体化模式（哪个时段更敏感）
-
-## 6.3 体检（脂肪肝）数据的意义
-
-1. 提供长期风险背景（不是只看当下血糖）
-2. 决定建议强度和优先级
-3. 支持长期目标（肝脏负担趋势改善）
-
-## 6.4 用户反馈数据的意义
-
-1. 判断建议可执行性（技术正确不等于能执行）
-2. 训练个体化策略（同一建议对不同人效果差异）
-3. 形成真正闭环优化
-
----
-
-## 7. Agent 工作流（服务视角）
-
-1. Observe：读取最新 glucose/meal/exam/context
-2. Understand：识别当前状态（稳定/上升/高风险窗口）
-3. Plan：生成今天/本次事件最佳行动
-4. Act：输出动作卡并触发提醒
-5. Review：比较建议前后指标，写回学习参数
-
----
-
-## 8. 成功判定标准（Success Criteria）
-
-## 8.1 用户体验指标
-
-1. 用户每日主动打开率
-2. 建议点击率、执行率
-3. 建议后复盘完成率
-
-## 8.2 健康结果指标
-
-1. 餐后峰值下降幅度
-2. 餐后 AUC 下降幅度
-3. 7d/28d TIR 提升
-
-## 8.3 代理质量指标
-
-1. 误报率（无效提醒）
-2. 漏报率（应提醒未提醒）
-3. 建议有效率（执行后指标改善）
-
----
-
-## 9. 风险与约束
-
-1. 不输出医疗诊断与处方建议
-2. 对紧急症状必须走固定安全模板
-3. 涉及个人敏感数据时，必须最小化上下文与可审计
-4. 建议内容要“可执行、可验证、可回溯”
-
----
-
-## 10. V0.1 Demo 交付建议
-
-1. 主页：今日代谢天气 + 今日计划
-2. 吃前页：输入餐次 -> 预演对比 + 替代建议
-3. 吃后页：实时救援卡 + 倒计时复盘
-4. 周报页：目标完成情况 + 指标变化证据
-5. 证据页：每条建议的触发依据与数据窗口
-
-> 这份蓝图的关键不是“多复杂模型”，而是把“观察-决策-行动-复盘”完整交付给用户，让用户实际感受到系统在主动服务。
-
----
+### 三、编译验证
+
+- **目标**：iOS 17.0+，iPhone + iPad
+- **编译器**：Xcode 15.4+，Swift 5.0
+- **构建结果**：`BUILD SUCCEEDED` ✅（iPhone 17 Simulator）
+- **18 个 Swift 源文件**，约 2,837 行代码
+
+### 四、技术栈
+
+- **前端**：SwiftUI (iOS 17+)，MVVM 架构
+- **后端**：FastAPI REST API (`http://localhost:8000`)
+- **认证**：JWT Bearer Token，access 30min + refresh 7 天
+- **网络**：URLSession async/await，自动 401 刷新重试
+
+### 五、后端 API 接口
+
+| 路由组 | 说明 |
+|---|---|
+| `/api/auth/` | 登录、注册、refresh、logout |
+| `/api/dashboard/` | 仪表盘汇总 |
+| `/api/glucose/` | 血糖数据（时间范围查询） |
+| `/api/meals/` | 膳食记录（拍照上传 3 步流程） |
+| `/api/chat/` | AI 对话、历史会话 |
+| `/api/agent/` | 主动推送、每日简报、餐后补救 |
+| `/api/health-data/` | AI 总结、文档上传/列表/详情/删除 |
+| `/api/health-reports/` | AI 健康摘要 |
+| `/api/settings/` | 用户设置、干预等级、同意书 |
+
+### 六、已知问题（v0.1.0 代码审查）
+
+经过完整代码审查，发现以下待修复项（详见 todolist.md）：
+
+- 🔴 **安全**：Token 存 UserDefaults（应迁移 Keychain）
+- 🔴 **错误处理**：5+ 处空 `catch {}` 吞掉错误，UI 无任何失败提示
+- 🔴 **性能**：`ChatMessage.id` 计算属性导致无限重渲染
+- 🔴 **生产就绪**：baseURL 硬编码 localhost，无环境配置
+- 🟠 **架构**：单例硬耦合，无协议/DI，不可测试
+- 🟠 **UI**：无 Dark Mode，无 Accessibility 标签
+- 🟠 **网络**：无离线支持，无请求取消，URL 参数未编码

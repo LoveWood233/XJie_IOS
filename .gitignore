@@ -20,6 +20,7 @@ backend/metabodash_backend.egg-info/
 node_modules/
 dist/
 coverage/
+miniprogram_npm/
 
 # Temp
 /tmp/

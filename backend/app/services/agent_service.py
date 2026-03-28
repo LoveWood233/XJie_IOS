@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import math
-import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -31,7 +30,7 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════
 
 
-def _latest_features(db: Session, user_id: uuid.UUID, window: str = "24h") -> dict:
+def _latest_features(db: Session, user_id: int, window: str = "24h") -> dict:
     """Return the most recent FeatureSnapshot dict for a window."""
     snap = db.execute(
         select(FeatureSnapshot)
@@ -42,7 +41,7 @@ def _latest_features(db: Session, user_id: uuid.UUID, window: str = "24h") -> di
     return snap.features if snap else {}
 
 
-def _recent_glucose(db: Session, user_id: uuid.UUID, hours: int = 2) -> list[dict]:
+def _recent_glucose(db: Session, user_id: int, hours: int = 2) -> list[dict]:
     """Return recent glucose readings as [{ts, v}]."""
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     rows = db.execute(
@@ -53,7 +52,7 @@ def _recent_glucose(db: Session, user_id: uuid.UUID, hours: int = 2) -> list[dic
     return [{"ts": r.ts.isoformat(), "v": r.glucose_mgdl} for r in rows]
 
 
-def _user_profile(db: Session, user_id: uuid.UUID) -> dict:
+def _user_profile(db: Session, user_id: int) -> dict:
     profile = db.execute(
         select(UserProfile).where(UserProfile.user_id == user_id)
     ).scalars().first()
@@ -68,7 +67,7 @@ def _user_profile(db: Session, user_id: uuid.UUID) -> dict:
     }
 
 
-def _user_strategy(db: Session, user_id: uuid.UUID):
+def _user_strategy(db: Session, user_id: int):
     settings = db.execute(
         select(UserSettings).where(UserSettings.user_id == user_id)
     ).scalars().first()
@@ -78,7 +77,7 @@ def _user_strategy(db: Session, user_id: uuid.UUID):
 
 def _save_action(
     db: Session,
-    user_id: uuid.UUID,
+    user_id: int,
     action_type: ActionType,
     payload: dict,
     evidence: dict,
@@ -96,6 +95,8 @@ def _save_action(
         status=ActionStatus(vr.status),
         priority=priority,
         payload_version="1.0.0",
+        trace_id=vr.trace_id,
+        error_code=vr.error_code,
     )
     db.add(action)
     db.commit()
@@ -108,7 +109,7 @@ def _save_action(
 # ═══════════════════════════════════════════════════════════════
 
 
-def generate_daily_briefing(db: Session, user_id: uuid.UUID) -> dict[str, Any]:
+def generate_daily_briefing(db: Session, user_id: int) -> dict[str, Any]:
     """Build today's metabolic weather report.
 
     Returns structured dict with:
@@ -208,7 +209,7 @@ def generate_daily_briefing(db: Session, user_id: uuid.UUID) -> dict[str, Any]:
 
 def simulate_pre_meal(
     db: Session,
-    user_id: uuid.UUID,
+    user_id: int,
     kcal: float,
     meal_time: str = "now",
 ) -> dict[str, Any]:
@@ -294,7 +295,7 @@ def simulate_pre_meal(
 # ═══════════════════════════════════════════════════════════════
 
 
-def check_rescue_needed(db: Session, user_id: uuid.UUID) -> dict[str, Any] | None:
+def check_rescue_needed(db: Session, user_id: int) -> dict[str, Any] | None:
     """Check if a rescue suggestion should fire.
 
     Triggers when recent glucose slope indicates rapid rise (>3 mg/dL per 5-min).
@@ -360,7 +361,7 @@ def check_rescue_needed(db: Session, user_id: uuid.UUID) -> dict[str, Any] | Non
 # ═══════════════════════════════════════════════════════════════
 
 
-def generate_weekly_review(db: Session, user_id: uuid.UUID) -> dict[str, Any]:
+def generate_weekly_review(db: Session, user_id: int) -> dict[str, Any]:
     """Build a weekly review comparing last 7d vs previous 7d."""
     feat_7d = _latest_features(db, user_id, "7d")
     feat_28d = _latest_features(db, user_id, "28d")
@@ -443,7 +444,7 @@ def generate_weekly_review(db: Session, user_id: uuid.UUID) -> dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════
 
 
-def get_proactive_message(db: Session, user_id: uuid.UUID) -> dict[str, Any]:
+def get_proactive_message(db: Session, user_id: int) -> dict[str, Any]:
     """Generate the dog's proactive bubble message.
 
     Combines:

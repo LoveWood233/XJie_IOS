@@ -4,9 +4,8 @@ All agentic features (daily briefing, pre-meal sim, rescue,
 weekly review, proactive dog message, feedback) are exposed here.
 """
 
-import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -42,7 +41,7 @@ class FeedbackRequest(BaseModel):
 
 @router.get("/today")
 def today_briefing(
-    user_id: uuid.UUID = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Daily metabolic weather – today's glucose status, risk windows, goals."""
@@ -51,7 +50,7 @@ def today_briefing(
 
 @router.get("/weekly")
 def weekly_review(
-    user_id: uuid.UUID = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Weekly review – last 7d analysis, goal progress, next week target."""
@@ -61,7 +60,7 @@ def weekly_review(
 @router.post("/premeal-sim")
 def premeal_sim(
     payload: PreMealSimRequest,
-    user_id: uuid.UUID = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Pre-meal simulation – predict post-meal glucose & suggest alternatives."""
@@ -70,7 +69,7 @@ def premeal_sim(
 
 @router.get("/rescue")
 def rescue_check(
-    user_id: uuid.UUID = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Check if a post-meal rescue is needed right now."""
@@ -82,7 +81,7 @@ def rescue_check(
 
 @router.get("/proactive")
 def proactive_message(
-    user_id: uuid.UUID = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Proactive dog message – for the home page bubble."""
@@ -93,7 +92,7 @@ def proactive_message(
 def list_actions(
     action_type: str | None = None,
     limit: int = 20,
-    user_id: uuid.UUID = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """List recent agent actions (optionally filtered by type)."""
@@ -105,11 +104,15 @@ def list_actions(
     return [
         {
             "id": str(a.id),
+            "user_id": str(a.user_id),
             "action_type": a.action_type.value if hasattr(a.action_type, 'value') else a.action_type,
+            "payload_version": a.payload_version,
             "payload": a.payload,
             "reason_evidence": a.reason_evidence,
             "status": a.status.value if hasattr(a.status, 'value') else a.status,
             "priority": a.priority,
+            "error_code": a.error_code,
+            "trace_id": a.trace_id,
             "created_ts": a.created_ts.isoformat() if a.created_ts else None,
         }
         for a in actions
@@ -119,12 +122,22 @@ def list_actions(
 @router.post("/feedback")
 def submit_feedback(
     payload: FeedbackRequest,
-    user_id: uuid.UUID = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Submit user feedback on an agent action (executed/not/partial)."""
+    # Verify the action belongs to the current user
+    action = db.execute(
+        select(AgentAction).where(
+            AgentAction.id == int(payload.action_id),
+            AgentAction.user_id == user_id,
+        )
+    ).scalar_one_or_none()
+    if action is None:
+        raise HTTPException(status_code=404, detail="Action not found or not owned by you")
+
     feedback = OutcomeFeedback(
-        action_id=uuid.UUID(payload.action_id),
+        action_id=action.id,
         user_feedback=FeedbackChoice(payload.user_feedback),
         objective_outcome={},
     )

@@ -1,0 +1,177 @@
+/* PROD-03: English Localization (en) */
+
+/* Tab Bar */
+"tab.home" = "Home";
+"tab.healthData" = "Health Data";
+"tab.omics" = "Omics";
+"tab.chat" = "AI Assistant";
+
+/* Navigation Titles */
+"nav.glucose" = "Glucose Curve";
+"nav.meals" = "Meals";
+"nav.settings" = "Settings";
+"nav.briefing" = "Daily Briefing";
+"nav.medicalRecords" = "Medical Records";
+"nav.examReports" = "Exam Reports";
+"nav.conversationHistory" = "Chat History";
+
+/* Common */
+"common.loading" = "Loading...";
+"common.error" = "Error";
+"common.ok" = "OK";
+"common.cancel" = "Cancel";
+"common.delete" = "Delete";
+"common.send" = "Send";
+"common.loadMore" = "Load More";
+"common.unnamed" = "Unnamed";
+"common.noData" = "No Data";
+
+/* Home */
+"home.hello" = "Hello";
+"home.todayGlucose" = "Today's Glucose";
+"home.todayMeals" = "Today's Meals";
+"home.avgMgdl" = "Avg mg/dL";
+"home.range" = "Range";
+"home.glucoseCurve" = "Glucose Curve";
+"home.recordMeal" = "Record Meal";
+"home.aiAssistant" = "AI Assistant";
+"home.healthData" = "Health Data";
+"home.meals" = "%d meals";
+
+/* Glucose */
+"glucose.curve" = "Glucose Curve";
+"glucose.noData" = "No glucose data";
+"glucose.avg" = "Average";
+"glucose.variability" = "Variability";
+"glucose.dataPoints" = "Data Points";
+"glucose.targetRange" = "Target Range 70-180";
+"glucose.value" = "Glucose";
+"glucose.window.24h" = "24h";
+"glucose.window.7d" = "7 Days";
+"glucose.window.all" = "All";
+
+/* Meals */
+"meals.photoRecord" = "Photo Record";
+"meals.manualRecord" = "Manual Record";
+"meals.noRecords" = "No meal records";
+"meals.startRecord" = "Tap above to start recording";
+"meals.photoAnalysis" = "Photo Analysis";
+"meals.mealRecords" = "Meal Records";
+"meals.done" = "Done";
+"meals.processing" = "Processing";
+"meals.confidence" = "Confidence: %@";
+"meals.estimateKcal" = "Enter estimated calories";
+"meals.inputKcal" = "Estimated calories (kcal)";
+"meals.add" = "Add";
+"meals.recordMeal" = "Record Meal";
+
+/* Chat */
+"chat.newChat" = "+ New Chat";
+"chat.history" = "History";
+"chat.inputPlaceholder" = "Type a message...";
+"chat.thinking" = "Thinking...";
+"chat.welcome" = "Hello! I'm your health AI assistant.";
+"chat.welcomeSub" = "Ask me about glucose, meals, and health management.";
+"chat.noHistory" = "No chat history";
+"chat.messages" = "%d messages";
+"chat.conversation" = "Conversation";
+
+/* Health */
+"health.glucoseStatus" = "Current Glucose Status";
+"health.dailyPlan" = "Today's Plan";
+"health.pendingRescue" = "Pending Rescues";
+"health.recentActions" = "Recent Actions";
+"health.healthReports" = "Health Reports";
+"health.initialExam" = "Initial Exam";
+"health.finalExam" = "Final Exam";
+"health.generateAI" = "Generate AI Summary";
+"health.noData" = "No health data";
+"health.pullRefresh" = "Pull to refresh";
+"health.riskWindows" = "Risk Windows";
+"health.goals" = "Goals";
+
+/* Health Data */
+"healthData.aiSummary" = "AI Health Summary";
+"healthData.tapGenerate" = "Tap to generate AI health summary";
+"healthData.analyzeAll" = "Comprehensive analysis of all your records";
+"healthData.updatedAt" = "Updated at %@";
+"healthData.records" = "%d records";
+"healthData.upload" = "Photo / File Upload";
+"healthData.uploadType" = "Select Upload Type";
+"healthData.uploadRecord" = "Upload Record";
+"healthData.uploadExam" = "Upload Exam Report";
+"healthData.canUpload" = "Upload";
+
+/* Documents */
+"doc.uploadExam" = "Upload Exam Report";
+"doc.uploadRecord" = "Upload Record";
+"doc.noExam" = "No exam reports";
+"doc.noRecord" = "No medical records";
+"doc.tapUpload" = "Tap above to upload %@";
+"doc.confirmDelete" = "Confirm Delete";
+"doc.deleteWarning" = "This cannot be undone. Are you sure?";
+"doc.abnormalCount" = "%d abnormal indicators detected";
+"doc.abnormalItems" = "Abnormal Items";
+"doc.examData" = "Exam Data";
+"doc.recordData" = "Record Data";
+"doc.examDetail" = "Exam Detail";
+"doc.recordDetail" = "Record Detail";
+"doc.noExtraction" = "No extracted data (LLM processing)";
+"doc.abnormal" = "%d abnormal";
+"doc.extracted" = "Extracted";
+"doc.extracting" = "Processing";
+"doc.photoUpload" = "Photo Upload";
+"doc.csvUpload" = "CSV Upload";
+"doc.pdfUpload" = "PDF Upload";
+
+/* Omics */
+"omics.title" = "Multi-Omics";
+"omics.proteomics" = "Proteomics";
+"omics.metabolomics" = "Metabolomics";
+"omics.genomics" = "Genomics";
+"omics.placeholder" = "Multi-omics data requires professional testing. Currently showing placeholder data.";
+"omics.pendingTest" = "Pending";
+
+/* Settings */
+"settings.title" = "Settings";
+"settings.account" = "Account";
+"settings.email" = "Email";
+"settings.registeredAt" = "Registered";
+"settings.intervention" = "Intervention Level";
+"settings.privacy" = "Privacy & Consent";
+"settings.allowAI" = "Allow AI Chat";
+"settings.allowUpload" = "Allow Data Upload";
+"settings.logout" = "Sign Out";
+"settings.confirmLogout" = "Confirm Sign Out";
+"settings.logoutMessage" = "Are you sure you want to sign out?";
+"settings.exit" = "Sign Out";
+"settings.l1" = "Mild";
+"settings.l2" = "Standard";
+"settings.l3" = "Proactive";
+"settings.l1Desc" = "Only alert at high risk, max 1 per day";
+"settings.l2Desc" = "Alert at medium risk, max 2 per day (default)";
+"settings.l3Desc" = "Proactive alerts, max 4 per day";
+
+/* Login */
+"login.appName" = "Xjie";
+"login.subtitle" = "Smart Metabolic Health";
+"login.emailLogin" = "Login with Email";
+"login.subjectLogin" = "Login with Subject ID";
+"login.selectSubject" = "Select Subject";
+"login.noSubjects" = "No subjects available";
+"login.login" = "Login";
+"login.signup" = "Sign Up";
+"login.emailLabel" = "Email";
+"login.emailPlaceholder" = "Enter email";
+"login.passwordLabel" = "Password";
+"login.passwordPlaceholder" = "At least 8 characters";
+"login.hasAccount" = "Already have an account? Login";
+"login.noAccount" = "No account? Sign up";
+"login.hint" = "Notice";
+
+/* Network */
+"network.offline" = "No network connection";
+"network.offlineData" = "Showing cached data";
+
+/* Splash */
+"splash.accessibility" = "Xjie Smart Metabolic Health";

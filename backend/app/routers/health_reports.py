@@ -1,18 +1,24 @@
 """Health reports router – parses Liver subject XLS exam data from disk."""
 
+import json
 import logging
 import re
-import uuid
+import time
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user_id, get_db
+from app.models.audit import LLMAuditLog
+from app.models.consent import Consent
 from app.models.user_profile import UserProfile
+from app.providers.factory import get_provider
+from app.utils.hash import context_hash
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +146,7 @@ def _parse_exam_xls(path: Path) -> dict[str, Any]:
 
 @router.get("")
 def get_health_reports(
-    user_id: uuid.UUID = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Return parsed health exam reports for the current (Liver) subject.
@@ -222,3 +228,217 @@ def get_health_reports(
         "patient": patient,
         "phases": phases,
     }
+
+
+# ── AI Health Summary (SSE stream) ──────────────────────────
+
+HEALTH_SUMMARY_SYSTEM = """\
+你是 MetaboDash AI 健康分析师。你需要根据用户的健康体检数据，生成一份**结构化、专业但通俗易懂**的健康总结报告。
+
+报告要求：
+1. 用中文撰写，使用 Markdown 格式
+2. 先给出一个 **整体健康评分**（🟢 正常 / 🟡 需关注 / 🔴 需就医）
+3. 分析每一项异常指标，解释其含义和可能原因
+4. 如有两期数据（初始/结束），重点分析**变化趋势**，哪些改善了、哪些恶化了
+5. 给出 3-5 条**个性化的健康建议**（饮食、运动、就医建议等）
+6. 如有危急值，务必突出提醒
+7. 用温和专业的语气，避免过度恐吓
+8. 控制在 800 字以内
+"""
+
+
+def _build_health_data_prompt(report: dict) -> str:
+    """Build a prompt string summarizing the health report data for LLM."""
+    parts: list[str] = []
+
+    patient = report.get("patient", {})
+    if patient:
+        parts.append(f"患者信息: 姓名={patient.get('name', '未知')}, "
+                     f"性别={patient.get('sex', '未知')}, "
+                     f"年龄={patient.get('age', '未知')}")
+
+    parts.append(f"受试者ID: {report.get('subject_id', '未知')}")
+    parts.append(f"队列: {report.get('cohort', '未知')}")
+
+    for phase in report.get("phases", []):
+        parts.append(f"\n--- {phase['label']}（{phase['phase']}）---")
+        parts.append(f"检查日期: {', '.join(phase.get('dates', []))}")
+        abnormal_items = [i for i in phase["items"] if i.get("abnormal")]
+        normal_count = len(phase["items"]) - len(abnormal_items)
+        parts.append(f"总项目数: {len(phase['items'])}，正常: {normal_count}，异常: {len(abnormal_items)}")
+
+        if abnormal_items:
+            parts.append("异常项目:")
+            for it in abnormal_items:
+                parts.append(f"  - {it['name']}: {it.get('value', '?')} {it.get('unit', '')} "
+                             f"(参考: {it.get('reference', '?')}) [{it.get('abnormal', '')}]")
+
+        # Also include a compact listing of all items
+        parts.append("所有检查项:")
+        for it in phase["items"]:
+            flag = f" ⚠{it['abnormal']}" if it.get("abnormal") else ""
+            parts.append(f"  {it['name']}: {it.get('value', '?')} {it.get('unit', '')}"
+                         f" (参考: {it.get('reference', '?')}){flag}")
+
+    return "\n".join(parts)
+
+
+@router.get("/ai-summary")
+def health_ai_summary(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Stream an AI-generated summary of the user's health reports."""
+    # Check consent
+    consent = db.execute(
+        select(Consent).where(Consent.user_id == user_id)
+    ).scalars().first()
+    if consent is None or not consent.allow_ai_chat:
+        raise HTTPException(status_code=403, detail="AI_CONSENT_REQUIRED")
+
+    # Look up subject
+    profile = db.execute(
+        select(UserProfile).where(UserProfile.user_id == user_id)
+    ).scalars().first()
+    if not profile or not profile.subject_id:
+        raise HTTPException(status_code=404, detail="No subject profile found")
+
+    sid = profile.subject_id
+
+    # Build the health report data (reuse parsing logic)
+    report_data = _build_report_data(sid, profile.cohort, db)
+
+    # Check there's data to summarize
+    has_phases = bool(report_data.get("phases"))
+    has_glucose_ctx = False
+
+    if not has_phases:
+        # For CGM users, we can still summarize glucose data
+        from app.services.context_builder import build_user_context
+        ctx = build_user_context(db, user_id)
+        if ctx.get("glucose") and ctx["glucose"].get("last_7d", {}).get("avg") is not None:
+            has_glucose_ctx = True
+        if not has_glucose_ctx:
+            raise HTTPException(status_code=404, detail="No health data to summarize")
+
+    # Build the prompt
+    if has_phases:
+        data_text = _build_health_data_prompt(report_data)
+    else:
+        from app.services.context_builder import build_user_context
+        ctx = build_user_context(db, user_id)
+        data_text = f"受试者: {sid}\n队列: CGM\n"
+        g = ctx.get("glucose", {})
+        if g.get("last_24h"):
+            d = g["last_24h"]
+            data_text += (f"过去24h血糖: 均值={d.get('avg')} mg/dL, "
+                          f"TIR(70-180)={d.get('tir_70_180_pct')}%, "
+                          f"变异性={d.get('variability')}\n")
+        if g.get("last_7d"):
+            d = g["last_7d"]
+            data_text += (f"过去7天血糖: 均值={d.get('avg')} mg/dL, "
+                          f"TIR(70-180)={d.get('tir_70_180_pct')}%, "
+                          f"变异性={d.get('variability')}\n")
+        if ctx.get("kcal_today") is not None:
+            data_text += f"今日热量: {ctx['kcal_today']} kcal\n"
+
+    provider = get_provider()
+
+    def event_stream():
+        started = time.perf_counter()
+        messages = [
+            {"role": "system", "content": HEALTH_SUMMARY_SYSTEM},
+            {"role": "user", "content": f"请根据以下数据生成健康总结报告:\n\n{data_text}"},
+        ]
+
+        emitted: list[str] = []
+        try:
+            stream = provider._client.chat.completions.create(
+                model=provider.text_model,
+                messages=messages,
+                max_completion_tokens=2000,
+                temperature=0.5,
+                stream=True,
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta and delta.content:
+                    emitted.append(delta.content)
+                    yield f"data: {json.dumps({'type': 'token', 'delta': delta.content}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.error("Health AI summary stream failed: %s", e)
+            # fallback to non-streaming
+            try:
+                result = provider.generate_text(
+                    {"health_report_data": data_text},
+                    f"请根据以下数据生成健康总结报告:\n\n{data_text}",
+                )
+                emitted.append(result.answer_markdown)
+                yield f"data: {json.dumps({'type': 'token', 'delta': result.answer_markdown}, ensure_ascii=False)}\n\n"
+            except Exception as e2:
+                logger.error("Health AI summary fallback also failed: %s", e2)
+                emitted.append(f"AI 分析暂时不可用: {e2}")
+                yield f"data: {json.dumps({'type': 'token', 'delta': f'AI 分析暂时不可用: {e2}'}, ensure_ascii=False)}\n\n"
+
+        final_text = "".join(emitted).strip()
+        latency_ms = int((time.perf_counter() - started) * 1000)
+
+        # Save audit
+        try:
+            log = LLMAuditLog(
+                user_id=user_id,
+                provider=provider.provider_name,
+                model=provider.text_model,
+                latency_ms=latency_ms,
+                prompt_tokens=None,
+                completion_tokens=None,
+                context_hash=context_hash({"health_summary": data_text[:200]}),
+                meta={"type": "health_summary", "subject_id": sid},
+            )
+            db.add(log)
+            db.commit()
+        except Exception:
+            logger.warning("Failed to save health summary audit log")
+
+        yield f"data: {json.dumps({'type': 'done', 'text': final_text}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+def _build_report_data(sid: str, cohort: str, db: Session) -> dict:
+    """Build health report dict (reused by main GET and AI summary)."""
+    if not sid.startswith("Liver"):
+        return {"subject_id": sid, "cohort": cohort, "patient": {}, "phases": []}
+
+    phases: list[dict[str, Any]] = []
+    patient: dict[str, str] = {}
+
+    init_folder = _find_subject_folder(_LIVER_DIR / "初始数据", sid)
+    if init_folder:
+        xls = _find_xls_in_folder(init_folder)
+        if xls:
+            parsed = _parse_exam_xls(xls)
+            if not patient and parsed["patient"]:
+                patient = parsed["patient"]
+            phases.append({
+                "phase": "初始",
+                "label": "基线体检",
+                "dates": parsed["audit_dates"],
+                "items": parsed["items"],
+            })
+
+    end_folder = _find_subject_folder(_LIVER_DIR / "结束数据", sid)
+    if end_folder:
+        xls = _find_xls_in_folder(end_folder)
+        if xls:
+            parsed = _parse_exam_xls(xls)
+            if not patient and parsed["patient"]:
+                patient = parsed["patient"]
+            phases.append({
+                "phase": "结束",
+                "label": "结束体检",
+                "dates": parsed["audit_dates"],
+                "items": parsed["items"],
+            })
+
+    return {"subject_id": sid, "cohort": cohort, "patient": patient, "phases": phases}

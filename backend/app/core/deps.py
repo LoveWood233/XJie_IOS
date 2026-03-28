@@ -1,8 +1,7 @@
-import uuid
-
 from fastapi import Header, HTTPException
 
 from app.core.security import decode_token
+from app.core.token_blacklist import get_blacklist
 from app.db.session import SessionLocal
 
 
@@ -14,13 +13,19 @@ def get_db():
         db.close()
 
 
-def get_current_user_id(authorization: str = Header(default="")) -> uuid.UUID:
+def get_current_user_id(authorization: str = Header(default="")) -> int:
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing Bearer token")
 
     token = authorization.removeprefix("Bearer ").strip()
     try:
         payload = decode_token(token)
-        return uuid.UUID(payload["sub"])
+        # Reject blacklisted tokens (logged-out)
+        jti = payload.get("jti")
+        if jti and get_blacklist().is_blacklisted(jti):
+            raise HTTPException(status_code=401, detail="Token revoked")
+        return int(payload["sub"])
+    except HTTPException:
+        raise
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=401, detail="Invalid token") from exc

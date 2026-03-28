@@ -1,0 +1,177 @@
+/* PROD-03: 中文本地化 (zh-Hans) — 主语言 */
+
+/* Tab Bar */
+"tab.home" = "首页";
+"tab.healthData" = "健康数据";
+"tab.omics" = "多组学";
+"tab.chat" = "AI 助手";
+
+/* Navigation Titles */
+"nav.glucose" = "血糖曲线";
+"nav.meals" = "膳食记录";
+"nav.settings" = "设置";
+"nav.briefing" = "今日简报";
+"nav.medicalRecords" = "历史病例";
+"nav.examReports" = "历史体检";
+"nav.conversationHistory" = "历史对话";
+
+/* Common */
+"common.loading" = "加载中...";
+"common.error" = "错误";
+"common.ok" = "确定";
+"common.cancel" = "取消";
+"common.delete" = "删除";
+"common.send" = "发送";
+"common.loadMore" = "加载更多";
+"common.unnamed" = "未命名";
+"common.noData" = "暂无数据";
+
+/* Home */
+"home.hello" = "你好";
+"home.todayGlucose" = "今日血糖";
+"home.todayMeals" = "今日膳食";
+"home.avgMgdl" = "平均 mg/dL";
+"home.range" = "范围";
+"home.glucoseCurve" = "血糖曲线";
+"home.recordMeal" = "记录膳食";
+"home.aiAssistant" = "AI 助手";
+"home.healthData" = "健康数据";
+"home.meals" = "%d 餐";
+
+/* Glucose */
+"glucose.curve" = "血糖曲线";
+"glucose.noData" = "暂无血糖数据";
+"glucose.avg" = "平均";
+"glucose.variability" = "变异性";
+"glucose.dataPoints" = "数据点";
+"glucose.targetRange" = "目标范围 70-180";
+"glucose.value" = "血糖值";
+"glucose.window.24h" = "24h";
+"glucose.window.7d" = "7 天";
+"glucose.window.all" = "全部";
+
+/* Meals */
+"meals.photoRecord" = "拍照记录";
+"meals.manualRecord" = "手动记录";
+"meals.noRecords" = "暂无膳食记录";
+"meals.startRecord" = "点击上方按钮开始记录";
+"meals.photoAnalysis" = "照片分析";
+"meals.mealRecords" = "膳食记录";
+"meals.done" = "已完成";
+"meals.processing" = "处理中";
+"meals.confidence" = "置信度: %@";
+"meals.estimateKcal" = "请输入估算热量";
+"meals.inputKcal" = "输入估算热量 (kcal)";
+"meals.add" = "添加";
+"meals.recordMeal" = "记录膳食";
+
+/* Chat */
+"chat.newChat" = "+ 新对话";
+"chat.history" = "历史";
+"chat.inputPlaceholder" = "输入消息...";
+"chat.thinking" = "思考中...";
+"chat.welcome" = "你好！我是你的健康AI助手。";
+"chat.welcomeSub" = "可以问我关于血糖、膳食、健康管理的问题。";
+"chat.noHistory" = "暂无历史对话";
+"chat.messages" = "%d 条消息";
+"chat.conversation" = "对话";
+
+/* Health */
+"health.glucoseStatus" = "当前血糖状态";
+"health.dailyPlan" = "今日计划";
+"health.pendingRescue" = "待处理救援";
+"health.recentActions" = "最近操作";
+"health.healthReports" = "健康报告";
+"health.initialExam" = "初始检查";
+"health.finalExam" = "结束检查";
+"health.generateAI" = "生成 AI 摘要";
+"health.noData" = "暂无健康数据";
+"health.pullRefresh" = "下拉刷新获取最新数据";
+"health.riskWindows" = "风险窗口";
+"health.goals" = "目标";
+
+/* Health Data */
+"healthData.aiSummary" = "AI 健康总结";
+"healthData.tapGenerate" = "点击生成 AI 健康总结";
+"healthData.analyzeAll" = "将综合您的所有病例和体检数据进行分析";
+"healthData.updatedAt" = "更新于 %@";
+"healthData.records" = "%d 份记录";
+"healthData.upload" = "拍照 / 文件上传";
+"healthData.uploadType" = "选择上传类型";
+"healthData.uploadRecord" = "上传病例";
+"healthData.uploadExam" = "上传体检报告";
+"healthData.canUpload" = "可上传";
+
+/* Documents */
+"doc.uploadExam" = "上传体检报告";
+"doc.uploadRecord" = "上传病例";
+"doc.noExam" = "暂无体检报告";
+"doc.noRecord" = "暂无病例记录";
+"doc.tapUpload" = "点击上方按钮上传%@";
+"doc.confirmDelete" = "确认删除";
+"doc.deleteWarning" = "删除后无法恢复，确定吗？";
+"doc.abnormalCount" = "检测到 %d 项异常指标";
+"doc.abnormalItems" = "异常项目";
+"doc.examData" = "体检数据";
+"doc.recordData" = "病例数据";
+"doc.examDetail" = "体检详情";
+"doc.recordDetail" = "病例详情";
+"doc.noExtraction" = "暂无提取数据（LLM 处理中）";
+"doc.abnormal" = "%d 项异常";
+"doc.extracted" = "已提取";
+"doc.extracting" = "处理中";
+"doc.photoUpload" = "拍照上传";
+"doc.csvUpload" = "CSV上传";
+"doc.pdfUpload" = "PDF上传";
+
+/* Omics */
+"omics.title" = "多组学";
+"omics.proteomics" = "蛋白组学";
+"omics.metabolomics" = "代谢组学";
+"omics.genomics" = "基因组学";
+"omics.placeholder" = "多组学数据需通过专业机构检测后上传，当前为占位展示。";
+"omics.pendingTest" = "待检测";
+
+/* Settings */
+"settings.title" = "设置";
+"settings.account" = "账户信息";
+"settings.email" = "邮箱";
+"settings.registeredAt" = "注册时间";
+"settings.intervention" = "干预级别";
+"settings.privacy" = "隐私与同意";
+"settings.allowAI" = "允许 AI 聊天";
+"settings.allowUpload" = "允许数据上传";
+"settings.logout" = "退出登录";
+"settings.confirmLogout" = "确认退出";
+"settings.logoutMessage" = "确定要退出登录吗？";
+"settings.exit" = "退出";
+"settings.l1" = "温和";
+"settings.l2" = "标准";
+"settings.l3" = "积极";
+"settings.l1Desc" = "仅在高风险时提醒，每天最多 1 条";
+"settings.l2Desc" = "中等风险时提醒，每天最多 2 条（默认）";
+"settings.l3Desc" = "主动提醒，每天最多 4 条";
+
+/* Login */
+"login.appName" = "Xjie";
+"login.subtitle" = "智能代谢健康管理";
+"login.emailLogin" = "使用邮箱登录";
+"login.subjectLogin" = "使用受试者 ID 登录";
+"login.selectSubject" = "选择受试者";
+"login.noSubjects" = "暂无可用受试者";
+"login.login" = "登录";
+"login.signup" = "注册";
+"login.emailLabel" = "邮箱";
+"login.emailPlaceholder" = "请输入邮箱";
+"login.passwordLabel" = "密码";
+"login.passwordPlaceholder" = "至少 8 位";
+"login.hasAccount" = "已有账号？去登录";
+"login.noAccount" = "没有账号？去注册";
+"login.hint" = "提示";
+
+/* Network */
+"network.offline" = "当前无网络连接";
+"network.offlineData" = "显示缓存数据";
+
+/* Splash */
+"splash.accessibility" = "Xjie 智能代谢健康管理";

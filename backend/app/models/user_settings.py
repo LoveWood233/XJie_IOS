@@ -1,9 +1,7 @@
-import uuid
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.compat import UUID
 
 from app.db.base import Base
 
@@ -16,9 +14,9 @@ class UserSettings(Base):
 
     __tablename__ = "user_settings"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), unique=True, index=True, nullable=False
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("user_account.id"), unique=True, index=True, nullable=False
     )
 
     # Intervention level: L1 (温和) / L2 (标准) / L3 (积极)

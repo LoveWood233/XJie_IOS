@@ -1,26 +1,34 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class SignupRequest(BaseModel):
-    email: EmailStr
+    phone: str = Field(min_length=5, max_length=20)
+    username: str = Field(min_length=1, max_length=50)
     password: str = Field(min_length=8, max_length=128)
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    phone: str = Field(min_length=5, max_length=20)
     password: str = Field(min_length=8, max_length=128)
 
 
 class AuthResponse(BaseModel):
     access_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
+    expires_in: int = 1800  # seconds
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 class UserMeOut(BaseModel):
     id: str
-    email: str
+    phone: str
+    username: str | None = None
     created_at: datetime
     consent: dict
     settings: dict | None = None
@@ -51,3 +59,7 @@ class SubjectInfo(BaseModel):
 
 class SubjectLoginRequest(BaseModel):
     subject_id: str = Field(min_length=2, max_length=30)
+
+
+class WxLoginRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=256)

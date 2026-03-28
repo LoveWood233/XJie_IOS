@@ -1,7 +1,7 @@
 """ETL and Feature Store API endpoints.
 
-These endpoints are intended for admin / batch operations, not end-user use.
-Authentication is intentionally relaxed for the MVP demo.
+These endpoints are intended for admin / batch operations.
+All endpoints require authentication.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import get_db
+from app.core.deps import get_current_user_id, get_db
 from app.models.feature import FeatureSnapshot
 from app.models.user_profile import UserProfile
 from app.schemas.etl import ETLRunResponse, FeatureSnapshotOut
@@ -42,6 +42,7 @@ def run_batch_etl(
     skip_glucose: bool = Query(default=False),
     skip_meals: bool = Query(default=False),
     skip_features: bool = Query(default=False),
+    _user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> ETLRunResponse:
     """Execute the full ETL pipeline: glucose → meals → features."""
@@ -94,6 +95,7 @@ def run_batch_etl(
 def get_features(
     subject_id: str,
     window: str | None = Query(default=None, description="Filter by window: 24h, 7d, 28d"),
+    _user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> list[FeatureSnapshotOut]:
     """Retrieve latest feature snapshots for a subject."""
@@ -127,7 +129,10 @@ def get_features(
 
 
 @router.post("/features/recompute", summary="Recompute all features")
-def recompute_features(db: Session = Depends(get_db)) -> dict[str, Any]:
+def recompute_features(
+    _user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
     """Force recompute feature snapshots for all subjects."""
     return compute_all_features(db)
 
@@ -138,7 +143,10 @@ def recompute_features(db: Session = Depends(get_db)) -> dict[str, Any]:
 
 
 @router.get("/subjects", summary="List all imported subjects")
-def list_subjects(db: Session = Depends(get_db)) -> list[dict]:
+def list_subjects(
+    _user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+) -> list[dict]:
     """Return all known study subjects with their profile data."""
     profiles = db.scalars(
         select(UserProfile).order_by(UserProfile.subject_id)
