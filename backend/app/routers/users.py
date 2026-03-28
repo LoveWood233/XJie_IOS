@@ -1,5 +1,3 @@
-import uuid
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -23,7 +21,7 @@ def me(user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db
 
     consent = db.execute(select(Consent).where(Consent.user_id == user.id)).scalars().first()
     if consent is None:
-        consent = Consent(id=uuid.uuid4(), user_id=user.id)
+        consent = Consent(user_id=user.id)
         db.add(consent)
         db.commit()
         db.refresh(consent)

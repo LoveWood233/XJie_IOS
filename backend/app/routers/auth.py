@@ -150,7 +150,6 @@ def login_subject(payload: SubjectLoginRequest, request: Request, db: Session = 
         db.flush()
 
         consent = Consent(
-            id=uuid.uuid4(),
             user_id=user.id,
             allow_ai_chat=True,
             allow_data_upload=True,
@@ -219,7 +218,7 @@ def signup(payload: SignupRequest, request: Request, db: Session = Depends(get_d
     db.add(user)
     db.flush()
 
-    consent = Consent(id=uuid.uuid4(), user_id=user.id, allow_ai_chat=False, allow_data_upload=True)
+    consent = Consent(user_id=user.id, allow_ai_chat=False, allow_data_upload=True)
     db.add(consent)
     db.commit()
     db.refresh(user)
@@ -322,7 +321,6 @@ def wx_login(payload: WxLoginRequest, request: Request, db: Session = Depends(ge
         db.add(user)
         db.flush()
         consent = Consent(
-            id=uuid.uuid4(),
             user_id=user.id,
             allow_ai_chat=True,
             allow_data_upload=True,
