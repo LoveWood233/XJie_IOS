@@ -52,6 +52,7 @@ final class AuthManager: ObservableObject {
 struct UserInfo: Codable {
     let id: String?
     let email: String?
+    let is_admin: Bool?
     let created_at: String?
     let consent: UserConsent?
 }

@@ -17,6 +17,25 @@ struct SettingsView: View {
                 // 隐私同意
                 consentCard
 
+                // 管理后台（仅管理员可见）
+                if vm.user?.is_admin == true {
+                    NavigationLink {
+                        AdminView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "shield.checkered")
+                                .foregroundColor(.appWarning)
+                            Text("管理后台")
+                                .font(.headline)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.appMuted)
+                        }
+                        .foregroundColor(.appText)
+                    }
+                    .cardStyle()
+                }
+
                 // 退出登录
                 Button { vm.showLogoutAlert = true } label: {
                     Text("退出登录")

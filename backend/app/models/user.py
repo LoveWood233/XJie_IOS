@@ -1,5 +1,5 @@
 
-from sqlalchemy import DateTime, SmallInteger, String, func
+from sqlalchemy import Boolean, DateTime, SmallInteger, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -13,6 +13,7 @@ class User(Base):
     phone: Mapped[str] = mapped_column(String(20), nullable=False)
     username: Mapped[str] = mapped_column(String(50), nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     sync_flag: Mapped[int | None] = mapped_column(SmallInteger, default=0)
     created_at: Mapped[DateTime | None] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[DateTime | None] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

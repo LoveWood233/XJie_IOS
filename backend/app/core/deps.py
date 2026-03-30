@@ -1,4 +1,4 @@
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 from app.core.security import decode_token
 from app.core.token_blacklist import get_blacklist
@@ -29,3 +29,16 @@ def get_current_user_id(authorization: str = Header(default="")) -> int:
         raise
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=401, detail="Invalid token") from exc
+
+
+def require_admin(
+    user_id: int = Depends(get_current_user_id),
+    db=Depends(get_db),
+) -> int:
+    """Return user_id only if the user has is_admin=True."""
+    from app.models.user import User
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user_id

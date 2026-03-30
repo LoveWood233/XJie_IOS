@@ -29,6 +29,7 @@ class UserMeOut(BaseModel):
     id: str
     phone: str
     username: str | None = None
+    is_admin: bool = False
     created_at: datetime
     consent: dict
     settings: dict | None = None
