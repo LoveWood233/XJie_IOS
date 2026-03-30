@@ -16,7 +16,7 @@ class OmicsUpload(Base):
     __tablename__ = "omics_uploads"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user_account.id", ondelete="CASCADE"), index=True, nullable=False)
     omics_type: Mapped[str] = mapped_column(String(30), nullable=False)  # "metabolomics" / "proteomics" / "genomics"
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -35,7 +35,7 @@ class OmicsModelTask(Base):
     __tablename__ = "omics_model_tasks"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user_account.id", ondelete="CASCADE"), index=True, nullable=False)
     upload_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("omics_uploads.id", ondelete="CASCADE"), nullable=False)
     model_type: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")  # pending/running/completed/failed
