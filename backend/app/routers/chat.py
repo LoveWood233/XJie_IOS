@@ -13,6 +13,7 @@ from app.core.deps import get_current_user_id, get_db
 from app.models.audit import LLMAuditLog
 from app.models.consent import Consent
 from app.models.conversation import ChatMessage, Conversation
+from app.models.user_profile import UserProfile
 from app.providers.factory import get_provider
 from app.providers.openai_provider import _parse_structured_response
 from app.schemas.chat import (
@@ -28,6 +29,25 @@ from app.utils.hash import context_hash
 router = APIRouter()
 
 # ── helpers ──────────────────────────────────────────────
+
+_PROFILE_FIELDS = {"sex", "age", "height_cm", "weight_kg", "display_name"}
+
+
+def _apply_profile_extraction(db: Session, user_id: int, extracted: dict) -> None:
+    \"\"\"Write AI-extracted profile fields to user_profiles.\"\"\"
+    updates = {k: v for k, v in extracted.items() if k in _PROFILE_FIELDS and v is not None}
+    if not updates:
+        return
+    profile = db.execute(select(UserProfile).where(UserProfile.user_id == user_id)).scalars().first()
+    if not profile:
+        profile = UserProfile(user_id=user_id, subject_id=f"auto_{user_id}")
+        db.add(profile)
+        db.flush()
+    for key, val in updates.items():
+        # Only update if the field is currently empty
+        if getattr(profile, key, None) in (None, "", 0):
+            setattr(profile, key, val)
+    db.commit()
 
 
 def _check_consent(db: Session, user_id: int) -> None:
@@ -151,9 +171,15 @@ def chat(
 
     _save_assistant_message(db, conv, result.summary, result.analysis, {"safety_flags": flags, "confidence": result.confidence})
     db.commit()
+
+    # Auto-extract profile info from AI response
+    if result.profile_extracted:
+        _apply_profile_extraction(db, user_id, result.profile_extracted)
+
     _save_audit(db, user_id, provider.provider_name, provider.text_model, latency_ms, context, {"message": payload.message, "safety_flags": flags})
 
-    return ChatResult(answer_markdown=result.answer_markdown, confidence=result.confidence,
+    return ChatResult(summary=result.summary, analysis=result.analysis,
+                      answer_markdown=result.answer_markdown, confidence=result.confidence,
                       followups=result.followups, safety_flags=flags + result.safety_flags, used_context=context,
                       thread_id=str(conv.id))
 

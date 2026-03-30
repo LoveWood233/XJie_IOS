@@ -12,37 +12,47 @@ from app.providers.base import ChatLLMResult, LLMProvider, MealVisionItem, MealV
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """\
-你是 Xjie 的健康AI助手 🤖。
-你帮助用户理解血糖数据、饮食记录、体检报告和代谢健康。
+你是「小杰」，用户的私人代谢健康助手 😊。你亲切、温暖，像一个懂医学的好朋友。
 
-关键规则:
-- 始终用中文回答
-- 你已经拥有用户的所有健康数据（血糖、体检报告指标等），直接基于数据分析回答，不要要求用户重新提供数据
-- 引用用户自身的数据时要具体、用数字说话（例如提及具体的检验数值、参考范围、是否异常）
-- 如果用户询问体检报告相关建议，直接引用系统提供的体检数据进行分析
-- 如果用户出现紧急症状,立刻建议就医
-- 保持亲切、专业、简洁的风格
+## 你的核心能力
+- 代谢健康管理：血糖分析、饮食建议、体检报告解读、脂肪肝/糖尿病风险评估
+- 日常健康咨询：感冒、头疼、失眠等常见问题，你会回答并**自然引导到代谢健康角度**
+- 对话式了解用户：在聊天中主动、自然地了解用户的基本信息和生活习惯
 
-**输出格式要求** — 你必须严格按照以下 JSON 格式回答, 不要输出任何其他文字:
+## 对话风格
+- 像朋友聊天，不要像医生看诊。用"你"而不是"您"
+- 简洁直接，不说废话。summary 控制在 1-2 句话
+- 每次回复结尾给 1-2 个后续建议问题，引导用户继续聊
+- 适当用 emoji 让对话更轻松，但不要过多
+
+## 数据感知策略（极其重要）
+- 如果系统提供了用户的健康数据（血糖、饮食、体检），**直接引用具体数据分析**，不要要求用户重新提供
+- 如果没有任何数据，**不要说"缺乏数据""没有数据"**！直接基于用户描述的症状/问题给出专业建议，同时自然地引导："对了，如果你有血糖监测数据，我可以帮你做更精准的分析哦"
+- 每次对话都是有价值的上下文，用户告诉你的信息都要在后续对话中记住和利用
+
+## 用户画像提取（每次对话都要做）
+如果用户在消息中提到了个人信息，在 JSON 的 profile_extracted 字段中提取。只提取用户**明确说出**的信息，不要猜测。
+可提取字段: sex（性别）、age（年龄）、height_cm（身高cm）、weight_kg（体重kg）、display_name（昵称/称呼）
+
+## 输出格式 — 严格 JSON，不要输出任何其他文字:
 ```json
 {
-  "summary": "简要回答（30-60字）",
-  "analysis": "详细分析（使用 Markdown 格式: 加粗、列表等。包含数据引用、原因分析、具体建议。结尾给 1-2 个后续建议问题。）"
+  "summary": "一句话回答（20-50字，亲切口语化，有信息量）",
+  "analysis": "详细分析（Markdown 格式，包含原因分析、具体建议、数据引用。结尾2个后续问题用 **💡 你还可以问我：** 引出）",
+  "followups": ["建议问题1", "建议问题2"],
+  "profile_extracted": {}
 }
 ```
 
-**summary 写法要求（极其重要）**:
-summary 必须是一段有信息量的个性化回答，严格包含以下四个要素:
-1. **引用数据**：开头说明"根据你的血糖/饮食/体检数据分析"，让用户知道回答基于他们的真实数据
-2. **可能原因**：简明给出与用户情况相关的可能原因或结论
-3. **行动建议**：一句话说明用户可以怎么做
-4. **邀请追问**：结尾用"告诉我更多细节，我会帮你做更深入的分析"引导用户继续
+### summary 示例（注意口语化和精简）:
+- 有数据时: "你最近7天血糖波动有点大，头疼可能跟这个有关，我帮你分析一下 👇"
+- 无数据时: "头疼可能跟好几个因素有关，我先给你几个建议，有血糖数据的话我能分析得更准 😊"
+- 日常问题: "最近睡不好确实容易影响代谢，我给你几个改善方案 💤"
 
-示例 summary：
-- "根据你近7天的血糖数据，你的餐后血糖波动偏大（均值偏高15%），头痛可能与血糖波动有关，建议关注餐后2小时血糖变化。告诉我更多症状细节，我帮你做更深入的分析。"
-- "根据你的体检报告，你的转氨酶偏高，结合近期饮食热量偏高，可能与脂肪肝进展相关，建议控制每日热量在1800kcal以内。告诉我更多细节，我帮你做更详细的分析。"
-
-**绝对不要**写出泛泛的、不结合用户数据的 summary，如"头痛需先排急症"这类通用医学建议。每个 summary 必须引用用户的实际数据。
+### 绝对不要:
+- 说"缺乏数据无法判断"、"建议补充数据"这类让用户扫兴的话
+- 写超过50字的 summary
+- 在没有数据时拒绝回答
 """
 
 
@@ -62,27 +72,25 @@ def _build_messages(
 
     # Inject user context as a system message
     ctx_parts = []
+    has_real_data = False
 
-    # Glucose summary (key: glucose_summary from context_builder)
+    # Glucose summary
     g = context.get("glucose_summary") or context.get("glucose") or {}
-    if g.get("last_24h"):
-        d = g["last_24h"]
-        ctx_parts.append(f"血糖数据 (过去24h): 均值={d.get('avg')} mg/dL, "
-                         f"TIR(70-180)={d.get('tir_70_180_pct')}%, "
-                         f"变异性={d.get('variability')}")
-    if g.get("last_7d"):
-        d = g["last_7d"]
-        ctx_parts.append(f"血糖数据 (过去7天): 均值={d.get('avg')} mg/dL, "
-                         f"TIR(70-180)={d.get('tir_70_180_pct')}%, "
-                         f"变异性={d.get('variability')}")
+    for label, key in [("过去24h", "last_24h"), ("过去7天", "last_7d")]:
+        d = g.get(key) or {}
+        if d.get("avg") is not None:
+            has_real_data = True
+            ctx_parts.append(f"血糖({label}): 均值={d['avg']}mg/dL, TIR(70-180)={d.get('tir_70_180_pct')}%, 变异性={d.get('variability')}")
 
-    # Daily calories (nested in data_quality from context_builder)
+    # Daily calories
     dq = context.get("data_quality") or {}
     kcal = dq.get("kcal_today") if dq else context.get("kcal_today")
-    if kcal is not None:
+    if kcal and kcal > 0:
+        has_real_data = True
         ctx_parts.append(f"今日热量: {kcal} kcal")
 
     if context.get("meals_today"):
+        has_real_data = True
         meals = context["meals_today"]
         ctx_parts.append(f"今日进餐 {len(meals)} 次: " +
                          ", ".join(f"{m.get('kcal', '?')}kcal@{m.get('ts', '?')}" for m in meals))
@@ -94,19 +102,23 @@ def _build_messages(
 
     if context.get("agent_features"):
         ctx_parts.append(f"Agent特征: {json.dumps(context['agent_features'], ensure_ascii=False)}")
-    if context.get("user_profile_info"):
-        ctx_parts.append(f"用户画像: {json.dumps(context['user_profile_info'], ensure_ascii=False)}")
+
+    # User profile
+    profile = context.get("user_profile_info") or {}
+    if profile:
+        ctx_parts.append(f"用户画像: {json.dumps(profile, ensure_ascii=False)}")
 
     # Health exam report data (Liver subjects)
     health_text = context.get("health_report_text", "")
     if health_text:
-        ctx_parts.append(f"以下是该用户的体检报告数据:\n{health_text}")
+        has_real_data = True
+        ctx_parts.append(f"体检报告数据:\n{health_text}")
 
     if ctx_parts:
-        messages.append({
-            "role": "system",
-            "content": "以下是该用户的实时健康数据（你已经拥有这些数据，可以直接引用分析，不要再要求用户提供）:\n" + "\n".join(ctx_parts),
-        })
+        prefix = "以下是该用户的健康数据，可直接引用分析：" if has_real_data else "该用户暂无设备数据，请基于对话内容回答，不要提及缺乏数据："
+        messages.append({"role": "system", "content": prefix + "\n" + "\n".join(ctx_parts)})
+    else:
+        messages.append({"role": "system", "content": "该用户是新用户，暂无健康数据。请直接回答问题，自然地了解用户情况，不要提及缺乏数据。"})
 
     # Append conversation history (max last 10 turns to fit context window)
     if history:
@@ -142,12 +154,11 @@ def _parse_structured_response(raw: str) -> dict:
             pass
 
     # Fallback: treat entire response as both summary and analysis
-    # Take first sentence as summary
     lines = text.split("\n")
     first_line = lines[0].strip().rstrip("。，,") if lines else text[:60]
     if len(first_line) > 50:
         first_line = first_line[:50] + "…"
-    return {"summary": first_line, "analysis": text}
+    return {"summary": first_line, "analysis": text, "followups": [], "profile_extracted": {}}
 
 
 
@@ -219,10 +230,11 @@ class OpenAIProvider(LLMProvider):
             return ChatLLMResult(
                 answer_markdown=raw,
                 confidence=0.85,
-                followups=[],
+                followups=parsed.get("followups", []),
                 safety_flags=[],
                 summary=parsed.get("summary", ""),
                 analysis=parsed.get("analysis", ""),
+                profile_extracted=parsed.get("profile_extracted", {}),
             )
         except Exception as e:
             logger.error("OpenAI generate_text failed: %s", e)

@@ -3,6 +3,7 @@ import SwiftUI
 /// AI 聊天页面 — 对应小程序 pages/chat/chat
 struct ChatView: View {
     @StateObject private var vm = ChatViewModel()
+    @State private var expandedIDs: Set<UUID> = []
     var isEmbedded: Bool = false
 
     var body: some View {
@@ -111,16 +112,47 @@ struct ChatView: View {
     }
 
     private func messageBubble(_ msg: ChatMessageItem) -> some View {
-        HStack {
-            if msg.role == "user" { Spacer() }
-            Text(msg.content)
-                .font(.subheadline)
-                .padding(12)
-                .background(msg.role == "user" ? Color.appPrimary : Color.appCardBg)
-                .foregroundColor(msg.role == "user" ? .white : .appText)
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)
-            if msg.role != "user" { Spacer() }
+        let isUser = msg.role == "user"
+        let isExpanded = expandedIDs.contains(msg.id)
+
+        return HStack {
+            if isUser { Spacer() }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(msg.content)
+                    .font(.subheadline)
+
+                // 展开/收起详细分析
+                if !isUser, let analysis = msg.analysis, !analysis.isEmpty {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            if isExpanded { expandedIDs.remove(msg.id) }
+                            else { expandedIDs.insert(msg.id) }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(isExpanded ? "收起分析" : "查看详细分析")
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        }
+                        .font(.caption)
+                        .foregroundColor(.appPrimary)
+                    }
+                    .buttonStyle(.plain)
+
+                    if isExpanded {
+                        Divider()
+                        Text(analysis)
+                            .font(.caption)
+                            .foregroundColor(.appMuted)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+            }
+            .padding(12)
+            .background(isUser ? Color.appPrimary : Color.appCardBg)
+            .foregroundColor(isUser ? .white : .appText)
+            .cornerRadius(12)
+            .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)
+            if !isUser { Spacer() }
         }
         .padding(.horizontal, 16)
     }

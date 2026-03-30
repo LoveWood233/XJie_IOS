@@ -40,9 +40,21 @@ struct ChatRequest: Encodable {
 }
 
 struct ChatResponse: Codable {
-    let answer_markdown: String?
     let summary: String?
+    let analysis: String?
+    let answer_markdown: String?
     let confidence: Double?
     let followups: [String]?
     let thread_id: String?
+}
+
+// MARK: - 授权
+
+struct ConsentUpdate: Encodable {
+    let allow_ai_chat: Bool
+}
+
+struct ConsentResponse: Decodable {
+    let allow_ai_chat: Bool
+    let allow_data_upload: Bool?
 }

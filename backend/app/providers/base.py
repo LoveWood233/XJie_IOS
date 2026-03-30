@@ -26,6 +26,7 @@ class ChatLLMResult(BaseModel):
     safety_flags: list[str] = []
     summary: str = ""
     analysis: str = ""
+    profile_extracted: dict = {}
 
 
 class LLMProvider(ABC):

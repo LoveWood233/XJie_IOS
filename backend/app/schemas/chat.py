@@ -9,6 +9,8 @@ class ChatRequest(BaseModel):
 
 
 class ChatResult(BaseModel):
+    summary: str = ""
+    analysis: str = ""
     answer_markdown: str
     confidence: float = Field(ge=0, le=1)
     followups: list[str] = []

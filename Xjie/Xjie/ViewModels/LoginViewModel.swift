@@ -66,6 +66,8 @@ final class LoginViewModel: ObservableObject {
             let body = LoginPhoneBody(phone: phone, username: isSignup ? username : phone, password: password)
             let res: AuthResponse = try await api.post(path, body: body)
             authManager.setAuth(accessToken: res.access_token, refreshToken: res.refresh_token ?? "")
+            // 自动开启 AI 聊天授权
+            let _: ConsentResponse? = try? await api.patch("/api/users/consent", body: ConsentUpdate(allow_ai_chat: true))
         } catch {
             alertMessage = error.localizedDescription; showAlert = true
         }

@@ -4,7 +4,8 @@ import Foundation
 struct ChatMessageItem: Identifiable {
     let id = UUID()
     let role: String
-    let content: String
+    let content: String       // summary (简约)
+    let analysis: String?     // 详细分析 (Markdown)
     let confidence: Double?
     let followups: [String]?
 }
@@ -58,7 +59,7 @@ final class ChatViewModel: ObservableObject {
         do {
             let msgs: [ChatMessage] = try await api.get("/api/chat/conversations/\(id)")
             guard !Task.isCancelled else { return }
-            messages = msgs.map { ChatMessageItem(role: $0.role, content: $0.content, confidence: nil, followups: nil) }
+            messages = msgs.map { ChatMessageItem(role: $0.role, content: $0.content, analysis: nil, confidence: nil, followups: nil) }
             threadId = id
         } catch {
             guard !Task.isCancelled else { return }
@@ -70,7 +71,7 @@ final class ChatViewModel: ObservableObject {
         let msg = inputValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !msg.isEmpty, !sending else { return }
 
-        let userMsg = ChatMessageItem(role: "user", content: msg, confidence: nil, followups: nil)
+        let userMsg = ChatMessageItem(role: "user", content: msg, analysis: nil, confidence: nil, followups: nil)
         messages.append(userMsg)
         inputValue = ""
         sending = true
@@ -85,12 +86,7 @@ final class ChatViewModel: ObservableObject {
             )
 
             // answer_markdown 可能是 JSON 字符串 (来自 mock provider)
-            var content = res.answer_markdown ?? res.summary ?? "..."
-            if let data = content.data(using: .utf8),
-               let parsed = try? JSONDecoder().decode([String: String].self, from: data),
-               let summary = parsed["summary"] {
-                content = summary
-            }
+            let content = res.summary ?? res.answer_markdown ?? "..."
 
             if let tid = res.thread_id {
                 threadId = tid
@@ -99,17 +95,30 @@ final class ChatViewModel: ObservableObject {
             let assistantMsg = ChatMessageItem(
                 role: "assistant",
                 content: content,
+                analysis: res.analysis,
                 confidence: res.confidence,
                 followups: res.followups
             )
             messages.append(assistantMsg)
+        } catch let error as APIError {
+            // 403 = AI 聊天未授权，自动开启后重试
+            if case .httpError(403, _) = error {
+                do {
+                    let _: ConsentResponse = try await api.patch("/api/users/consent", body: ConsentUpdate(allow_ai_chat: true))
+                    let res: ChatResponse = try await api.post("/api/chat", body: ChatRequest(message: msg, thread_id: threadId))
+                    let content = res.summary ?? res.answer_markdown ?? "..."
+                    if let tid = res.thread_id { threadId = tid }
+                    messages.append(ChatMessageItem(role: "assistant", content: content, analysis: res.analysis, confidence: res.confidence, followups: res.followups))
+                    return
+                } catch {
+                    // 自动授权失败，显示错误
+                }
+            }
+            let errorMsg = ChatMessageItem(role: "assistant", content: "请求失败: \(error.localizedDescription)", analysis: nil, confidence: nil, followups: nil)
+            messages.append(errorMsg)
+            errorMessage = error.localizedDescription
         } catch {
-            let errorMsg = ChatMessageItem(
-                role: "assistant",
-                content: "请求失败: \(error.localizedDescription)",
-                confidence: nil,
-                followups: nil
-            )
+            let errorMsg = ChatMessageItem(role: "assistant", content: "请求失败: \(error.localizedDescription)", analysis: nil, confidence: nil, followups: nil)
             messages.append(errorMsg)
             errorMessage = error.localizedDescription
         }
