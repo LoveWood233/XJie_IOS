@@ -67,7 +67,7 @@ struct LoginView: View {
             Button {
                 vm.mode = vm.mode == .subject ? .email : .subject
             } label: {
-                Text(vm.mode == .subject ? "使用邮箱登录" : "使用受试者 ID 登录")
+                Text(vm.mode == .subject ? "使用手机号登录" : "使用受试者 ID 登录")
                     .foregroundColor(.appPrimary)
                     .font(.subheadline)
             }
@@ -134,17 +134,27 @@ struct LoginView: View {
         }
     }
 
-    // MARK: - 邮箱登录
+    // MARK: - 手机号登录
 
     private var emailSection: some View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("邮箱").font(.subheadline).foregroundColor(.appMuted)
-                TextField("请输入邮箱", text: $vm.email)
+                Text("手机号").font(.subheadline).foregroundColor(.appMuted)
+                TextField("请输入手机号", text: $vm.phone)
                     .textFieldStyle(.roundedBorder)
-                    .keyboardType(.emailAddress)
-                    .textContentType(.emailAddress)
+                    .keyboardType(.phonePad)
+                    .textContentType(.telephoneNumber)
                     .textInputAutocapitalization(.never)
+            }
+
+            if vm.isSignup {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("用户名").font(.subheadline).foregroundColor(.appMuted)
+                    TextField("请输入用户名", text: $vm.username)
+                        .textFieldStyle(.roundedBorder)
+                        .textContentType(.username)
+                        .textInputAutocapitalization(.never)
+                }
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -155,7 +165,7 @@ struct LoginView: View {
             }
 
             Button {
-                Task { await vm.loginEmail(authManager: authManager) }
+                Task { await vm.loginPhone(authManager: authManager) }
             } label: {
                 HStack {
                     if vm.loading { ProgressView().tint(.white) }

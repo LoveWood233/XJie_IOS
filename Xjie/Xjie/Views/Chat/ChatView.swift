@@ -3,39 +3,47 @@ import SwiftUI
 /// AI 聊天页面 — 对应小程序 pages/chat/chat
 struct ChatView: View {
     @StateObject private var vm = ChatViewModel()
+    var isEmbedded: Bool = false
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // 消息列表
-                messageList
+        let content = chatContent
+        if isEmbedded {
+            content
+        } else {
+            NavigationStack { content }
+        }
+    }
 
-                // 推荐问题
-                if let lastAssistant = vm.messages.last(where: { $0.role == "assistant" }),
-                   let followups = lastAssistant.followups, !followups.isEmpty {
-                    followupsBar(followups)
-                }
+    private var chatContent: some View {
+        VStack(spacing: 0) {
+            // 消息列表
+            messageList
 
-                // 输入栏
-                inputBar
+            // 推荐问题
+            if let lastAssistant = vm.messages.last(where: { $0.role == "assistant" }),
+               let followups = lastAssistant.followups, !followups.isEmpty {
+                followupsBar(followups)
             }
-            .navigationTitle("AI 助手")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("+ 新对话") { vm.newChat() }
-                        .font(.subheadline)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { vm.showHistory.toggle() } label: {
-                        Label("历史", systemImage: "clock.arrow.circlepath")
-                    }
+
+            // 输入栏
+            inputBar
+        }
+        .navigationTitle("AI 助手")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("+ 新对话") { vm.newChat() }
                     .font(.subheadline)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { vm.showHistory.toggle() } label: {
+                    Label("历史", systemImage: "clock.arrow.circlepath")
                 }
+                .font(.subheadline)
             }
-            .sheet(isPresented: $vm.showHistory) {
-                historySheet
-            }
+        }
+        .sheet(isPresented: $vm.showHistory) {
+            historySheet
         }
         .task { await vm.loadConversations() }
         .alert("错误", isPresented: Binding(

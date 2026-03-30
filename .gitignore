@@ -40,3 +40,5 @@ outputs/
 
 # Uploaded files
 backend/uploads/
+certs/
+deploy_commands.txt

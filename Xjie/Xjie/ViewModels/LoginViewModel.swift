@@ -8,9 +8,10 @@ final class LoginViewModel: ObservableObject {
     @Published var subjects: [SubjectItem] = []
     @Published var loading = false
     @Published var selectedSubject = ""
-    @Published var email = ""
+    @Published var phone = ""
+    @Published var username = ""
     @Published var password = ""
-    @Published var isSignup = false
+    @Published var isSignup = true
     @Published var showAlert = false
     @Published var alertMessage = ""
     @Published var errorMessage: String?
@@ -48,20 +49,22 @@ final class LoginViewModel: ObservableObject {
         }
     }
 
-    func loginEmail(authManager: AuthManager) async {
-        guard !email.isEmpty, !password.isEmpty else {
-            alertMessage = "请填写邮箱和密码"; showAlert = true; return
+    func loginPhone(authManager: AuthManager) async {
+        guard !phone.isEmpty, !password.isEmpty else {
+            alertMessage = "请填写手机号和密码"; showAlert = true; return
         }
         guard password.count >= 8 else {
             alertMessage = "密码至少 8 位"; showAlert = true; return
+        }
+        if isSignup && username.isEmpty {
+            alertMessage = "请填写用户名"; showAlert = true; return
         }
         loading = true
         defer { loading = false }
         do {
             let path = isSignup ? "/api/auth/signup" : "/api/auth/login"
-            let res: AuthResponse = try await api.post(
-                path, body: LoginEmailBody(email: email, password: password)
-            )
+            let body = LoginPhoneBody(phone: phone, username: isSignup ? username : phone, password: password)
+            let res: AuthResponse = try await api.post(path, body: body)
             authManager.setAuth(accessToken: res.access_token, refreshToken: res.refresh_token ?? "")
         } catch {
             alertMessage = error.localizedDescription; showAlert = true

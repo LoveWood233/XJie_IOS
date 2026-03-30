@@ -19,27 +19,27 @@ final class LoginViewModelTests: XCTestCase {
         XCTAssertEqual(vm.alertMessage, "请选择受试者")
     }
 
-    func testLoginEmailEmptyShowsAlert() async {
+    func testLoginPhoneEmptyShowsAlert() async {
         let mock = MockAPIService()
         let vm = LoginViewModel(api: mock)
         let auth = AuthManager.shared
 
-        vm.email = ""
+        vm.phone = ""
         vm.password = ""
-        await vm.loginEmail(authManager: auth)
+        await vm.loginPhone(authManager: auth)
 
         XCTAssertTrue(vm.showAlert)
-        XCTAssertEqual(vm.alertMessage, "请填写邮箱和密码")
+        XCTAssertEqual(vm.alertMessage, "请填写手机号和密码")
     }
 
-    func testLoginEmailShortPasswordShowsAlert() async {
+    func testLoginPhoneShortPasswordShowsAlert() async {
         let mock = MockAPIService()
         let vm = LoginViewModel(api: mock)
         let auth = AuthManager.shared
 
-        vm.email = "test@test.com"
+        vm.phone = "13800138000"
         vm.password = "short"
-        await vm.loginEmail(authManager: auth)
+        await vm.loginPhone(authManager: auth)
 
         XCTAssertTrue(vm.showAlert)
         XCTAssertEqual(vm.alertMessage, "密码至少 8 位")
@@ -67,21 +67,22 @@ final class LoginViewModelTests: XCTestCase {
         auth.logout() // 清理
     }
 
-    func testLoginEmailSuccess() async throws {
+    func testLoginPhoneSuccess() async throws {
         let mock = MockAPIService()
-        let response = AuthResponse(access_token: "tok_email", refresh_token: "ref_email")
+        let response = AuthResponse(access_token: "tok_phone", refresh_token: "ref_phone")
         try await mock.setResponse(for: "/api/auth/login", value: response)
 
         let vm = LoginViewModel(api: mock)
         let auth = AuthManager.shared
         auth.logout()
 
-        vm.email = "user@example.com"
+        vm.phone = "13800138000"
         vm.password = "password123"
-        await vm.loginEmail(authManager: auth)
+        vm.isSignup = false
+        await vm.loginPhone(authManager: auth)
 
         XCTAssertFalse(vm.showAlert)
-        XCTAssertEqual(auth.token, "tok_email")
+        XCTAssertEqual(auth.token, "tok_phone")
         XCTAssertFalse(vm.loading)
 
         auth.logout()

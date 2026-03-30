@@ -17,8 +17,9 @@ struct LoginSubjectBody: Encodable {
     let subject_id: String
 }
 
-struct LoginEmailBody: Encodable {
-    let email: String
+struct LoginPhoneBody: Encodable {
+    let phone: String
+    let username: String
     let password: String
 }
 

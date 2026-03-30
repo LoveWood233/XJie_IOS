@@ -82,7 +82,7 @@ struct HomeView: View {
                     .font(.subheadline)
             }
             if p.has_rescue == true {
-                NavigationLink(destination: ChatView()) {
+                NavigationLink(destination: ChatView(isEmbedded: true)) {
                     Label("有待处理的救援建议", systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundColor(.appDanger)
@@ -138,7 +138,7 @@ struct HomeView: View {
             NavigationLink(destination: MealsView()) {
                 quickItem(icon: "camera", label: "记录膳食")
             }
-            NavigationLink(destination: ChatView()) {
+            NavigationLink(destination: ChatView(isEmbedded: true)) {
                 quickItem(icon: "bubble.left.and.text.bubble.right", label: "AI 助手")
             }
             NavigationLink(destination: HealthView()) {
