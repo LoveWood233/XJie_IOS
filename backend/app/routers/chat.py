@@ -70,14 +70,19 @@ def _save_audit(
     latency_ms: int,
     used_context: dict,
     meta: dict,
+    *,
+    feature: str = "chat",
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
 ) -> None:
     log = LLMAuditLog(
         user_id=user_id,
         provider=provider,
         model=model,
+        feature=feature,
         latency_ms=latency_ms,
-        prompt_tokens=None,
-        completion_tokens=None,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
         context_hash=context_hash(used_context),
         meta=meta,
     )
@@ -176,7 +181,9 @@ def chat(
     if result.profile_extracted:
         _apply_profile_extraction(db, user_id, result.profile_extracted)
 
-    _save_audit(db, user_id, provider.provider_name, provider.text_model, latency_ms, context, {"message": payload.message, "safety_flags": flags})
+    _save_audit(db, user_id, provider.provider_name, provider.text_model, latency_ms, context,
+                {"message": payload.message, "safety_flags": flags},
+                feature="chat", prompt_tokens=result.prompt_tokens, completion_tokens=result.completion_tokens)
 
     return ChatResult(summary=result.summary, analysis=result.analysis,
                       answer_markdown=result.answer_markdown, confidence=result.confidence,
@@ -238,7 +245,8 @@ def chat_stream(
         ast_msg = _save_assistant_message(db, conv, summary, analysis, {"safety_flags": flags, "confidence": 0.85})
         db.commit()
         _save_audit(db, user_id, provider.provider_name, provider.text_model, latency_ms, context,
-                    {"message": payload.message, "safety_flags": flags, "stream": True})
+                    {"message": payload.message, "safety_flags": flags, "stream": True},
+                    feature="chat")
 
         done_payload = {"summary": summary, "analysis": analysis, "confidence": 0.85,
                         "followups": [], "safety_flags": flags,

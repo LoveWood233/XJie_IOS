@@ -44,11 +44,27 @@ struct AdminOmicsItem: Decodable, Identifiable {
     let created_at: String?
 }
 
+struct FeatureTokenDetail: Decodable {
+    let prompt_tokens: Int
+    let completion_tokens: Int
+    let total_tokens: Int
+    let call_count: Int
+}
+
+struct AdminTokenStats: Decodable {
+    let total_prompt_tokens: Int
+    let total_completion_tokens: Int
+    let total_tokens: Int
+    let total_calls: Int
+    let by_feature: [String: FeatureTokenDetail]
+}
+
 // MARK: - ViewModel
 
 @MainActor
 final class AdminViewModel: ObservableObject {
     @Published var stats: AdminStats?
+    @Published var tokenStats: AdminTokenStats?
     @Published var users: [AdminUserItem] = []
     @Published var conversations: [AdminConversationItem] = []
     @Published var omicsUploads: [AdminOmicsItem] = []
@@ -95,6 +111,14 @@ final class AdminViewModel: ObservableObject {
         }
     }
 
+    func fetchTokenStats() async {
+        do {
+            tokenStats = try await api.get("/api/admin/token-stats")
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func fetchAll() async {
         loading = true
         defer { loading = false }
@@ -102,6 +126,7 @@ final class AdminViewModel: ObservableObject {
         async let u: Void = fetchUsers()
         async let c: Void = fetchConversations()
         async let o: Void = fetchOmics()
-        _ = await (s, u, c, o)
+        async let t: Void = fetchTokenStats()
+        _ = await (s, u, c, o, t)
     }
 }

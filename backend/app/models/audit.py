@@ -16,6 +16,7 @@ class LLMAuditLog(Base):
 
     provider: Mapped[str] = mapped_column(String, nullable=False)
     model: Mapped[str] = mapped_column(String, nullable=False)
+    feature: Mapped[str] = mapped_column(String, nullable=False, default="chat", server_default="chat")
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Iterator
 
 from openai import OpenAI
@@ -10,6 +11,32 @@ from app.core.config import settings
 from app.providers.base import ChatLLMResult, LLMProvider, MealVisionItem, MealVisionResult
 
 logger = logging.getLogger(__name__)
+
+# ── Health/medical topic detection ────────────────────────────
+
+_HEALTH_KEYWORDS = re.compile(
+    r"血糖|血压|血脂|胆固醇|甘油三酯|糖化血红蛋白|BMI|体重|肥胖|脂肪肝|"
+    r"糖尿病|胰岛素|代谢|尿酸|痛风|心血管|冠心病|高血压|低血糖|"
+    r"头疼|头痛|失眠|胃痛|腹泻|便秘|恶心|呕吐|发烧|咳嗽|"
+    r"感冒|过敏|皮疹|水肿|疲劳|乏力|胸闷|心悸|头晕|"
+    r"肝功能|肾功能|甲状腺|体检|报告|检查|化验|指标|异常|偏高|偏低|"
+    r"组学|代谢组|蛋白组|基因|风险|健康|饮食|营养|热量|卡路里|"
+    r"运动|锻炼|睡眠|作息|膳食|碳水|蛋白质|脂肪|维生素|"
+    r"药|治疗|症状|诊断|病|医院|医生|处方",
+    re.IGNORECASE,
+)
+
+
+def _is_health_query(user_query: str, history: list[dict] | None = None) -> bool:
+    """Detect if the query is health/medical related."""
+    if _HEALTH_KEYWORDS.search(user_query):
+        return True
+    # Check recent history for medical context
+    if history:
+        for msg in history[-4:]:
+            if _HEALTH_KEYWORDS.search(msg.get("content", "")):
+                return True
+    return False
 
 SYSTEM_PROMPT = """\
 你是「小杰」，用户的私人代谢健康助手。你亲切、温暖，像一个懂医学的好朋友。
@@ -215,8 +242,8 @@ def _parse_structured_response(raw: str) -> dict:
 
 class OpenAIProvider(LLMProvider):
     provider_name = "openai"
-    text_model = settings.OPENAI_MODEL_TEXT
-    vision_model = settings.OPENAI_MODEL_VISION
+    text_model = "kimi-k2.5"
+    vision_model = "kimi-k2.5"
 
     def __init__(self) -> None:
         kwargs: dict = {"api_key": settings.OPENAI_API_KEY}
@@ -225,7 +252,7 @@ class OpenAIProvider(LLMProvider):
         self._client = OpenAI(**kwargs)
 
     def analyze_image(self, image_url: str) -> MealVisionResult:
-        """Analyze a meal photo using GPT vision."""
+        """Analyze a meal photo using Kimi K2.5 vision (thinking disabled for speed)."""
         try:
             response = self._client.chat.completions.create(
                 model=self.vision_model,
@@ -238,9 +265,15 @@ class OpenAIProvider(LLMProvider):
                         {"type": "text", "text": "请分析这张图片中的食物,估算热量。"},
                     ]},
                 ],
-                max_completion_tokens=500,
+                max_tokens=1024,
                 temperature=0.3,
+                extra_body={"thinking": {"type": "disabled"}},
             )
+            # Extract token usage
+            usage = getattr(response, "usage", None)
+            prompt_tokens = getattr(usage, "prompt_tokens", None) if usage else None
+            completion_tokens = getattr(usage, "completion_tokens", None) if usage else None
+
             raw = response.choices[0].message.content or "{}"
             # Try to parse JSON from the response
             try:
@@ -259,6 +292,8 @@ class OpenAIProvider(LLMProvider):
                 total_kcal=data.get("total_kcal", sum(i.kcal for i in items)),
                 confidence=data.get("confidence", 0.5),
                 notes=data.get("notes", ""),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
             )
         except Exception as e:
             logger.error("OpenAI vision analysis failed: %s", e)
@@ -267,15 +302,28 @@ class OpenAIProvider(LLMProvider):
                                     notes=f"Vision fallback: {e}")
 
     def generate_text(self, context: dict, user_query: str, *, history: list[dict] | None = None) -> ChatLLMResult:
-        """Generate a complete text response."""
+        """Generate a complete text response. Uses thinking mode for health queries."""
         try:
             messages = _build_messages(context, user_query, history=history)
+            is_health = _is_health_query(user_query, history)
+
+            # kimi-k2.5 defaults to thinking enabled; disable for non-health queries
+            extra: dict = {}
+            if not is_health:
+                extra["extra_body"] = {"thinking": {"type": "disabled"}}
+
             response = self._client.chat.completions.create(
                 model=self.text_model,
                 messages=messages,
-                max_completion_tokens=4096,
-                temperature=0.7,
+                max_tokens=16000 if is_health else 4096,
+                temperature=1.0,
+                **extra,
             )
+            # Extract token usage
+            usage = getattr(response, "usage", None)
+            prompt_tokens = getattr(usage, "prompt_tokens", None) if usage else None
+            completion_tokens = getattr(usage, "completion_tokens", None) if usage else None
+
             raw = response.choices[0].message.content or ""
             parsed = _parse_structured_response(raw)
             return ChatLLMResult(
@@ -286,6 +334,8 @@ class OpenAIProvider(LLMProvider):
                 summary=parsed.get("summary", ""),
                 analysis=parsed.get("analysis", ""),
                 profile_extracted=parsed.get("profile_extracted", {}),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
             )
         except Exception as e:
             logger.error("OpenAI generate_text failed: %s", e)
@@ -299,15 +349,22 @@ class OpenAIProvider(LLMProvider):
             )
 
     def stream_text(self, context: dict, user_query: str, *, history: list[dict] | None = None) -> Iterator[str]:
-        """Stream text token-by-token using OpenAI streaming API."""
+        """Stream text token-by-token. Uses thinking mode for health queries."""
         try:
             messages = _build_messages(context, user_query, history=history)
+            is_health = _is_health_query(user_query, history)
+
+            extra: dict = {}
+            if not is_health:
+                extra["extra_body"] = {"thinking": {"type": "disabled"}}
+
             stream = self._client.chat.completions.create(
                 model=self.text_model,
                 messages=messages,
-                max_completion_tokens=4096,
-                temperature=0.7,
+                max_tokens=16000 if is_health else 4096,
+                temperature=1.0,
                 stream=True,
+                **extra,
             )
             for chunk in stream:
                 delta = chunk.choices[0].delta if chunk.choices else None

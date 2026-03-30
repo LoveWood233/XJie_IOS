@@ -352,15 +352,21 @@ def health_ai_summary(
         ]
 
         emitted: list[str] = []
+        _prompt_tokens = None
+        _completion_tokens = None
         try:
             stream = provider._client.chat.completions.create(
                 model=provider.text_model,
                 messages=messages,
-                max_completion_tokens=2000,
-                temperature=0.5,
+                max_tokens=16000,
+                temperature=1.0,
                 stream=True,
+                stream_options={"include_usage": True},
             )
             for chunk in stream:
+                if getattr(chunk, "usage", None):
+                    _prompt_tokens = chunk.usage.prompt_tokens
+                    _completion_tokens = chunk.usage.completion_tokens
                 delta = chunk.choices[0].delta if chunk.choices else None
                 if delta and delta.content:
                     emitted.append(delta.content)
@@ -374,6 +380,8 @@ def health_ai_summary(
                     f"请根据以下数据生成健康总结报告:\n\n{data_text}",
                 )
                 emitted.append(result.answer_markdown)
+                _prompt_tokens = result.prompt_tokens
+                _completion_tokens = result.completion_tokens
                 yield f"data: {json.dumps({'type': 'token', 'delta': result.answer_markdown}, ensure_ascii=False)}\n\n"
             except Exception as e2:
                 logger.error("Health AI summary fallback also failed: %s", e2)
@@ -390,8 +398,9 @@ def health_ai_summary(
                 provider=provider.provider_name,
                 model=provider.text_model,
                 latency_ms=latency_ms,
-                prompt_tokens=None,
-                completion_tokens=None,
+                prompt_tokens=_prompt_tokens,
+                completion_tokens=_completion_tokens,
+                feature="health_summary",
                 context_hash=context_hash({"health_summary": data_text[:200]}),
                 meta={"type": "health_summary", "subject_id": sid},
             )

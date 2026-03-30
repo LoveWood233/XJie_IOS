@@ -1,4 +1,4 @@
-"""Admin management endpoints — stats, user list, conversations, omics uploads."""
+"""Admin management endpoints — stats, user list, conversations, omics uploads, token usage."""
 
 from __future__ import annotations
 
@@ -9,11 +9,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_db, require_admin
+from app.models.audit import LLMAuditLog
 from app.models.conversation import ChatMessage, Conversation
 from app.models.meal import Meal
 from app.models.omics import OmicsUpload
 from app.models.user import User
-from app.schemas.admin import AdminConversationItem, AdminOmicsItem, AdminStats, AdminUserItem
+from app.schemas.admin import AdminConversationItem, AdminOmicsItem, AdminStats, AdminTokenStats, AdminUserItem
 
 router = APIRouter()
 
@@ -219,3 +220,46 @@ def toggle_admin(
     user.is_admin = not user.is_admin
     db.commit()
     return {"id": user.id, "is_admin": user.is_admin}
+
+
+# ── Token usage stats ────────────────────────────────────────
+
+
+@router.get("/token-stats", response_model=AdminTokenStats)
+def admin_token_stats(
+    _admin_id: int = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Return total and per-feature token consumption from LLM audit logs."""
+    rows = db.execute(
+        select(
+            LLMAuditLog.feature,
+            func.coalesce(func.sum(LLMAuditLog.prompt_tokens), 0).label("prompt"),
+            func.coalesce(func.sum(LLMAuditLog.completion_tokens), 0).label("completion"),
+            func.count().label("call_count"),
+        )
+        .group_by(LLMAuditLog.feature)
+    ).all()
+
+    total_prompt = 0
+    total_completion = 0
+    total_calls = 0
+    features: dict[str, dict] = {}
+    for r in rows:
+        total_prompt += r.prompt
+        total_completion += r.completion
+        total_calls += r.call_count
+        features[r.feature] = {
+            "prompt_tokens": r.prompt,
+            "completion_tokens": r.completion,
+            "total_tokens": r.prompt + r.completion,
+            "call_count": r.call_count,
+        }
+
+    return AdminTokenStats(
+        total_prompt_tokens=total_prompt,
+        total_completion_tokens=total_completion,
+        total_tokens=total_prompt + total_completion,
+        total_calls=total_calls,
+        by_feature=features,
+    )

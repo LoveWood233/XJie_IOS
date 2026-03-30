@@ -30,6 +30,16 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     def startup() -> None:
         Base.metadata.create_all(bind=engine)
+        # Migrate: add 'feature' column to llm_audit_logs if missing
+        with engine.connect() as conn:
+            from sqlalchemy import text
+            try:
+                conn.execute(text(
+                    "ALTER TABLE llm_audit_logs ADD COLUMN IF NOT EXISTS feature VARCHAR NOT NULL DEFAULT 'chat'"
+                ))
+                conn.commit()
+            except Exception:
+                conn.rollback()
 
     @app.get("/healthz")
     def healthz():

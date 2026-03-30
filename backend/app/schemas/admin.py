@@ -12,6 +12,21 @@ class AdminStats(BaseModel):
     total_meals: int
 
 
+class FeatureTokenDetail(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    call_count: int = 0
+
+
+class AdminTokenStats(BaseModel):
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    total_tokens: int = 0
+    total_calls: int = 0
+    by_feature: dict[str, FeatureTokenDetail] = {}
+
+
 class AdminUserItem(BaseModel):
     id: int
     phone: str

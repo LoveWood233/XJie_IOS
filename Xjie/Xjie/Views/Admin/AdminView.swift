@@ -13,6 +13,7 @@ struct AdminView: View {
                 Text("用户").tag(1)
                 Text("对话").tag(2)
                 Text("组学").tag(3)
+                Text("Token").tag(4)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
@@ -26,6 +27,7 @@ struct AdminView: View {
                     case 1: usersPanel
                     case 2: conversationsPanel
                     case 3: omicsPanel
+                    case 4: tokenPanel
                     default: EmptyView()
                     }
                 }
@@ -230,6 +232,95 @@ struct AdminView: View {
             }
         }
         .cardStyle()
+    }
+
+    // MARK: - Token Panel
+
+    private var tokenPanel: some View {
+        VStack(spacing: 12) {
+            if let t = vm.tokenStats {
+                // Total summary
+                VStack(spacing: 8) {
+                    Text("Token 消耗总览")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        tokenCard(title: "总 Token", value: formatNumber(t.total_tokens), color: .appPrimary)
+                        tokenCard(title: "总调用次数", value: formatNumber(t.total_calls), color: .appAccent)
+                        tokenCard(title: "Prompt Token", value: formatNumber(t.total_prompt_tokens), color: Color(hex: "1B96C9"))
+                        tokenCard(title: "Completion Token", value: formatNumber(t.total_completion_tokens), color: Color(hex: "0F4C81"))
+                    }
+                }
+                .cardStyle()
+
+                // Per-feature breakdown
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("按功能分布")
+                        .font(.headline)
+                    ForEach(Array(t.by_feature.keys.sorted()), id: \.self) { feature in
+                        if let detail = t.by_feature[feature] {
+                            featureTokenRow(feature: feature, detail: detail)
+                        }
+                    }
+                }
+                .cardStyle()
+            } else {
+                Text("加载中…").foregroundColor(.appMuted)
+            }
+        }
+    }
+
+    private func tokenCard(title: String, value: String, color: Color) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.title2.bold())
+                .foregroundColor(color)
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.appMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(color.opacity(0.08))
+        .cornerRadius(10)
+    }
+
+    private func featureTokenRow(feature: String, detail: FeatureTokenDetail) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(featureDisplayName(feature))
+                    .font(.subheadline.bold())
+                Text("\(formatNumber(detail.call_count)) 次调用")
+                    .font(.caption)
+                    .foregroundColor(.appMuted)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(formatNumber(detail.total_tokens))
+                    .font(.subheadline.bold())
+                    .foregroundColor(.appPrimary)
+                Text("P: \(formatNumber(detail.prompt_tokens)) / C: \(formatNumber(detail.completion_tokens))")
+                    .font(.caption2)
+                    .foregroundColor(.appMuted)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func featureDisplayName(_ feature: String) -> String {
+        switch feature {
+        case "chat": return "AI 对话"
+        case "meal_vision": return "膳食图像分析"
+        case "health_summary": return "健康报告摘要"
+        case "agent": return "智能 Agent"
+        default: return feature
+        }
+    }
+
+    private func formatNumber(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
+        if n >= 1_000 { return String(format: "%.1fK", Double(n) / 1_000) }
+        return "\(n)"
     }
 
     // MARK: - Helpers
