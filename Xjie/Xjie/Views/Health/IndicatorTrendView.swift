@@ -5,6 +5,7 @@ import Charts
 
 struct IndicatorTrendCard: View {
     let trend: IndicatorTrend
+    @State private var selectedIndex: Int? = nil
 
     private var dateFormatter: DateFormatter {
         let f = DateFormatter()
@@ -15,6 +16,12 @@ struct IndicatorTrendCard: View {
     private var displayFormatter: DateFormatter {
         let f = DateFormatter()
         f.dateFormat = "yy/MM"
+        return f
+    }
+
+    private var detailFormatter: DateFormatter {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
         return f
     }
 
@@ -99,6 +106,51 @@ struct IndicatorTrendCard: View {
                         .foregroundStyle(pt.abnormal ? .red : Color.appPrimary)
                         .symbolSize(pt.abnormal ? 40 : 24)
                     }
+
+                    // Selection indicator
+                    if let idx = selectedIndex, idx < chartPoints.count {
+                        let sel = chartPoints[idx]
+                        RuleMark(x: .value("选中", sel.date))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                            .foregroundStyle(.gray.opacity(0.6))
+                            .annotation(position: .top, spacing: 4) {
+                                VStack(spacing: 2) {
+                                    Text(detailFormatter.string(from: sel.date))
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                    HStack(spacing: 2) {
+                                        Text(String(format: "%.2f", sel.value))
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(sel.abnormal ? .red : .appPrimary)
+                                        if let unit = trend.unit, !unit.isEmpty {
+                                            Text(unit)
+                                                .font(.system(size: 9))
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    if sel.abnormal {
+                                        Text("异常")
+                                            .font(.system(size: 9, weight: .medium))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(Capsule().fill(.red))
+                                    }
+                                }
+                                .padding(6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(.ultraThinMaterial)
+                                        .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                                )
+                            }
+                        PointMark(
+                            x: .value("选中", sel.date),
+                            y: .value("选中值", sel.value)
+                        )
+                        .foregroundStyle(sel.abnormal ? .red : Color.appPrimary)
+                        .symbolSize(80)
+                    }
                 }
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: 5)) { value in
@@ -123,6 +175,38 @@ struct IndicatorTrendCard: View {
                     }
                 }
                 .frame(height: 160)
+                .chartOverlay { proxy in
+                    GeometryReader { geo in
+                        Rectangle()
+                            .fill(.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { drag in
+                                        let origin = geo[proxy.plotFrame!].origin
+                                        let x = drag.location.x - origin.x
+                                        guard let date: Date = proxy.value(atX: x) else { return }
+                                        // Find nearest point
+                                        var nearest = 0
+                                        var minDist = Double.infinity
+                                        for (i, pt) in chartPoints.enumerated() {
+                                            let dist = abs(pt.date.timeIntervalSince(date))
+                                            if dist < minDist {
+                                                minDist = dist
+                                                nearest = i
+                                            }
+                                        }
+                                        selectedIndex = nearest
+                                    }
+                                    .onEnded { _ in
+                                        // Keep selection visible; tap outside to dismiss
+                                    }
+                            )
+                            .onTapGesture {
+                                selectedIndex = nil
+                            }
+                    }
+                }
             } else {
                 Text("数据点不足，无法绘制趋势图")
                     .font(.caption)

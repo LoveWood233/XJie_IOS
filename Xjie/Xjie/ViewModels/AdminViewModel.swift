@@ -56,7 +56,38 @@ struct AdminTokenStats: Decodable {
     let total_completion_tokens: Int
     let total_tokens: Int
     let total_calls: Int
+    let summary_task_tokens: Int
+    let summary_task_count: Int
     let by_feature: [String: FeatureTokenDetail]
+}
+
+struct UserTokenItem: Decodable, Identifiable {
+    var id: Int { user_id }
+    let user_id: Int
+    let username: String?
+    let phone: String
+    let audit_tokens: Int
+    let audit_calls: Int
+    let summary_tokens: Int
+    let summary_calls: Int
+    let total_tokens: Int
+}
+
+struct SummaryTaskItem: Decodable, Identifiable {
+    var id: String { task_id }
+    let task_id: String
+    let user_id: Int
+    let username: String?
+    let status: String
+    let stage: String?
+    let token_used: Int
+    let created_at: String?
+    let updated_at: String?
+}
+
+struct AdminTokenDetails: Decodable {
+    let by_user: [UserTokenItem]
+    let recent_tasks: [SummaryTaskItem]
 }
 
 // MARK: - ViewModel
@@ -65,6 +96,7 @@ struct AdminTokenStats: Decodable {
 final class AdminViewModel: ObservableObject {
     @Published var stats: AdminStats?
     @Published var tokenStats: AdminTokenStats?
+    @Published var tokenDetails: AdminTokenDetails?
     @Published var users: [AdminUserItem] = []
     @Published var conversations: [AdminConversationItem] = []
     @Published var omicsUploads: [AdminOmicsItem] = []
@@ -113,7 +145,10 @@ final class AdminViewModel: ObservableObject {
 
     func fetchTokenStats() async {
         do {
-            tokenStats = try await api.get("/api/admin/token-stats")
+            async let statsReq: AdminTokenStats = api.get("/api/admin/token-stats")
+            async let detailsReq: AdminTokenDetails = api.get("/api/admin/token-stats/details")
+            tokenStats = try await statsReq
+            tokenDetails = try await detailsReq
         } catch {
             errorMessage = error.localizedDescription
         }

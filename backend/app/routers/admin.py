@@ -11,10 +11,20 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_db, require_admin
 from app.models.audit import LLMAuditLog
 from app.models.conversation import ChatMessage, Conversation
+from app.models.health_document import SummaryTask
 from app.models.meal import Meal
 from app.models.omics import OmicsUpload
 from app.models.user import User
-from app.schemas.admin import AdminConversationItem, AdminOmicsItem, AdminStats, AdminTokenStats, AdminUserItem
+from app.schemas.admin import (
+    AdminConversationItem,
+    AdminOmicsItem,
+    AdminStats,
+    AdminTokenDetails,
+    AdminTokenStats,
+    AdminUserItem,
+    SummaryTaskItem,
+    UserTokenItem,
+)
 
 router = APIRouter()
 
@@ -230,7 +240,7 @@ def admin_token_stats(
     _admin_id: int = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Return total and per-feature token consumption from LLM audit logs."""
+    """Return total and per-feature token consumption from LLM audit logs + summary tasks."""
     rows = db.execute(
         select(
             LLMAuditLog.feature,
@@ -256,10 +266,122 @@ def admin_token_stats(
             "call_count": r.call_count,
         }
 
+    # Summary tasks token data
+    summary_row = db.execute(
+        select(
+            func.coalesce(func.sum(SummaryTask.token_used), 0).label("tokens"),
+            func.count().label("cnt"),
+        )
+        .where(SummaryTask.status == "done")
+    ).one()
+
     return AdminTokenStats(
         total_prompt_tokens=total_prompt,
         total_completion_tokens=total_completion,
-        total_tokens=total_prompt + total_completion,
-        total_calls=total_calls,
+        total_tokens=total_prompt + total_completion + summary_row.tokens,
+        total_calls=total_calls + summary_row.cnt,
+        summary_task_tokens=summary_row.tokens,
+        summary_task_count=summary_row.cnt,
         by_feature=features,
     )
+
+
+# ── Token usage details (per-user + recent tasks) ────────────
+
+
+@router.get("/token-stats/details", response_model=AdminTokenDetails)
+def admin_token_details(
+    _admin_id: int = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Per-user token breakdown and recent summary tasks."""
+    # Per-user audit tokens
+    audit_sub = (
+        select(
+            LLMAuditLog.user_id,
+            func.coalesce(func.sum(LLMAuditLog.prompt_tokens + LLMAuditLog.completion_tokens), 0).label("audit_tokens"),
+            func.count().label("audit_calls"),
+        )
+        .group_by(LLMAuditLog.user_id)
+        .subquery()
+    )
+    # Per-user summary tokens
+    summary_sub = (
+        select(
+            SummaryTask.user_id,
+            func.coalesce(func.sum(SummaryTask.token_used), 0).label("summary_tokens"),
+            func.count().label("summary_calls"),
+        )
+        .where(SummaryTask.status == "done")
+        .group_by(SummaryTask.user_id)
+        .subquery()
+    )
+
+    user_rows = db.execute(
+        select(
+            User.id,
+            User.username,
+            User.phone,
+            func.coalesce(audit_sub.c.audit_tokens, 0).label("audit_tokens"),
+            func.coalesce(audit_sub.c.audit_calls, 0).label("audit_calls"),
+            func.coalesce(summary_sub.c.summary_tokens, 0).label("summary_tokens"),
+            func.coalesce(summary_sub.c.summary_calls, 0).label("summary_calls"),
+        )
+        .outerjoin(audit_sub, audit_sub.c.user_id == User.id)
+        .outerjoin(summary_sub, summary_sub.c.user_id == User.id)
+        .where(User.deleted == 0)
+        .where(
+            (audit_sub.c.audit_tokens > 0) | (summary_sub.c.summary_tokens > 0)
+        )
+        .order_by(
+            (func.coalesce(audit_sub.c.audit_tokens, 0) + func.coalesce(summary_sub.c.summary_tokens, 0)).desc()
+        )
+        .limit(100)
+    ).all()
+
+    by_user = [
+        UserTokenItem(
+            user_id=r.id,
+            username=r.username,
+            phone=r.phone,
+            audit_tokens=r.audit_tokens,
+            audit_calls=r.audit_calls,
+            summary_tokens=r.summary_tokens,
+            summary_calls=r.summary_calls,
+            total_tokens=r.audit_tokens + r.summary_tokens,
+        )
+        for r in user_rows
+    ]
+
+    # Recent summary tasks
+    task_rows = db.execute(
+        select(
+            SummaryTask.id,
+            SummaryTask.user_id,
+            User.username,
+            SummaryTask.status,
+            SummaryTask.stage,
+            SummaryTask.token_used,
+            SummaryTask.created_at,
+            SummaryTask.updated_at,
+        )
+        .join(User, User.id == SummaryTask.user_id)
+        .order_by(SummaryTask.created_at.desc())
+        .limit(50)
+    ).all()
+
+    recent_tasks = [
+        SummaryTaskItem(
+            task_id=r.id,
+            user_id=r.user_id,
+            username=r.username,
+            status=r.status,
+            stage=r.stage,
+            token_used=r.token_used,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
+        )
+        for r in task_rows
+    ]
+
+    return AdminTokenDetails(by_user=by_user, recent_tasks=recent_tasks)

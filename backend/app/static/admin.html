@@ -98,6 +98,7 @@
     <button class="tab" onclick="switchTab('users',this)">👥 用户</button>
     <button class="tab" onclick="switchTab('conversations',this)">💬 对话</button>
     <button class="tab" onclick="switchTab('omics',this)">🧬 组学</button>
+    <button class="tab" onclick="switchTab('token',this)">🔑 Token</button>
   </div>
 
   <div class="content">
@@ -133,6 +134,32 @@
         <div style="overflow-x:auto"><table><thead><tr>
           <th>ID</th><th>用户</th><th>类型</th><th>文件名</th><th>大小</th><th>风险</th><th>摘要</th><th>上传时间</th>
         </tr></thead><tbody id="omicsTbody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- Token -->
+    <div id="panel-token" style="display:none">
+      <div class="stats-grid" id="tokenStatsGrid"><div class="loading">加载中…</div></div>
+
+      <div class="table-wrapper" style="margin-top:16px">
+        <div class="table-header"><h3>🔧 按功能分布（LLM Audit）</h3></div>
+        <div style="overflow-x:auto"><table><thead><tr>
+          <th>功能</th><th>调用次数</th><th>Prompt Tokens</th><th>Completion Tokens</th><th>总 Tokens</th>
+        </tr></thead><tbody id="featureTbody"></tbody></table></div>
+      </div>
+
+      <div class="table-wrapper" style="margin-top:16px">
+        <div class="table-header"><h3>👤 按用户分布</h3></div>
+        <div style="overflow-x:auto"><table><thead><tr>
+          <th>用户</th><th>手机号</th><th>Audit Tokens</th><th>Audit 次数</th><th>摘要 Tokens</th><th>摘要次数</th><th>总 Tokens</th>
+        </tr></thead><tbody id="userTokenTbody"></tbody></table></div>
+      </div>
+
+      <div class="table-wrapper" style="margin-top:16px">
+        <div class="table-header"><h3>📋 近期摘要任务</h3></div>
+        <div style="overflow-x:auto"><table><thead><tr>
+          <th>Task ID</th><th>用户</th><th>状态</th><th>阶段</th><th>Token</th><th>创建时间</th><th>更新时间</th>
+        </tr></thead><tbody id="tasksTbody"></tbody></table></div>
       </div>
     </div>
   </div>
@@ -177,7 +204,7 @@ async function apiFetch(path) {
 async function showApp() {
   document.getElementById('loginOverlay').style.display = 'none';
   document.getElementById('mainApp').style.display = '';
-  loadStats(); loadUsers(); loadConversations(); loadOmics();
+  loadStats(); loadUsers(); loadConversations(); loadOmics(); loadTokenStats();
 }
 
 // Check existing token
@@ -196,7 +223,7 @@ document.getElementById('loginPassword').addEventListener('keydown', e => { if (
 function switchTab(name, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  ['stats','users','conversations','omics'].forEach(p => {
+  ['stats','users','conversations','omics','token'].forEach(p => {
     document.getElementById('panel-' + p).style.display = p === name ? '' : 'none';
   });
 }
@@ -269,6 +296,67 @@ async function loadOmics() {
       <td>${fmtTime(o.created_at)}</td>
     </tr>`).join('') || '<tr><td colspan="8" class="empty">暂无上传</td></tr>';
   } catch {}
+}
+
+// ── Token Stats ──
+async function loadTokenStats() {
+  try {
+    const [ts, details] = await Promise.all([
+      apiFetch('/api/admin/token-stats'),
+      apiFetch('/api/admin/token-stats/details')
+    ]);
+    // Summary cards
+    document.getElementById('tokenStatsGrid').innerHTML = [
+      statHTML('🔑', fmtNum(ts.total_tokens), '总 Token', '#6366f1'),
+      statHTML('📞', fmtNum(ts.total_calls), '总调用', '#06b6d4'),
+      statHTML('📤', fmtNum(ts.total_prompt_tokens), 'Prompt Token', '#22c55e'),
+      statHTML('📥', fmtNum(ts.total_completion_tokens), 'Completion Token', '#f59e0b'),
+      statHTML('📝', fmtNum(ts.summary_task_tokens), '摘要任务 Token', '#8b5cf6'),
+      statHTML('📊', fmtNum(ts.summary_task_count), '摘要任务数', '#f97316'),
+    ].join('');
+
+    // By feature table
+    const features = Object.entries(ts.by_feature || {}).sort((a,b) => b[1].total_tokens - a[1].total_tokens);
+    document.getElementById('featureTbody').innerHTML = features.map(([f, d]) => `<tr>
+      <td><span class="badge badge-type">${esc(featureName(f))}</span></td>
+      <td>${fmtNum(d.call_count)}</td>
+      <td>${fmtNum(d.prompt_tokens)}</td>
+      <td>${fmtNum(d.completion_tokens)}</td>
+      <td><strong>${fmtNum(d.total_tokens)}</strong></td>
+    </tr>`).join('') || '<tr><td colspan="5" class="empty">暂无数据</td></tr>';
+
+    // By user table
+    document.getElementById('userTokenTbody').innerHTML = (details.by_user || []).map(u => `<tr>
+      <td><strong>${esc(u.username || '--')}</strong></td>
+      <td>${esc(u.phone)}</td>
+      <td>${fmtNum(u.audit_tokens)}</td>
+      <td>${u.audit_calls}</td>
+      <td>${fmtNum(u.summary_tokens)}</td>
+      <td>${u.summary_calls}</td>
+      <td><strong>${fmtNum(u.total_tokens)}</strong></td>
+    </tr>`).join('') || '<tr><td colspan="7" class="empty">暂无数据</td></tr>';
+
+    // Recent tasks table
+    document.getElementById('tasksTbody').innerHTML = (details.recent_tasks || []).map(t => `<tr>
+      <td><code style="font-size:12px">${esc(t.task_id)}</code></td>
+      <td>${esc(t.username || '--')}</td>
+      <td>${statusBadge(t.status)}</td>
+      <td>${t.stage || '--'}</td>
+      <td>${fmtNum(t.token_used)}</td>
+      <td>${fmtTime(t.created_at)}</td>
+      <td>${fmtTime(t.updated_at)}</td>
+    </tr>`).join('') || '<tr><td colspan="7" class="empty">暂无任务</td></tr>';
+  } catch { document.getElementById('tokenStatsGrid').innerHTML = '<div class="empty">加载失败</div>'; }
+}
+function fmtNum(n) { if (n >= 1e6) return (n/1e6).toFixed(1)+'M'; if (n >= 1e3) return (n/1e3).toFixed(1)+'K'; return ''+n; }
+function featureName(f) {
+  const m = {chat:'AI 对话', meal_vision:'膳食图像分析', health_summary:'健康报告摘要', agent:'智能 Agent', omics_analysis:'组学分析'};
+  return m[f] || f;
+}
+function statusBadge(s) {
+  const cls = s==='done'?'badge-low':s==='failed'?'badge-high':s==='running'?'badge-medium':'badge-type';
+  const txt = {done:'完成',failed:'失败',running:'运行中',pending:'等待中'};
+  return `<span class="badge ${cls}">${txt[s]||s}</span>`;
 }
 
 // ── Helpers ──

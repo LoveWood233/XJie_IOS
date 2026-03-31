@@ -24,7 +24,36 @@ class AdminTokenStats(BaseModel):
     total_completion_tokens: int = 0
     total_tokens: int = 0
     total_calls: int = 0
+    summary_task_tokens: int = 0
+    summary_task_count: int = 0
     by_feature: dict[str, FeatureTokenDetail] = {}
+
+
+class SummaryTaskItem(BaseModel):
+    task_id: str
+    user_id: int
+    username: str | None = None
+    status: str
+    stage: str | None = None
+    token_used: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class UserTokenItem(BaseModel):
+    user_id: int
+    username: str | None = None
+    phone: str
+    audit_tokens: int = 0
+    audit_calls: int = 0
+    summary_tokens: int = 0
+    summary_calls: int = 0
+    total_tokens: int = 0
+
+
+class AdminTokenDetails(BaseModel):
+    by_user: list[UserTokenItem] = []
+    recent_tasks: list[SummaryTaskItem] = []
 
 
 class AdminUserItem(BaseModel):

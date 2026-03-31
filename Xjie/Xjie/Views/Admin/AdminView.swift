@@ -249,6 +249,8 @@ struct AdminView: View {
                         tokenCard(title: "总调用次数", value: formatNumber(t.total_calls), color: .appAccent)
                         tokenCard(title: "Prompt Token", value: formatNumber(t.total_prompt_tokens), color: Color(hex: "1B96C9"))
                         tokenCard(title: "Completion Token", value: formatNumber(t.total_completion_tokens), color: Color(hex: "0F4C81"))
+                        tokenCard(title: "摘要任务 Token", value: formatNumber(t.summary_task_tokens), color: Color(hex: "8b5cf6"))
+                        tokenCard(title: "摘要任务数", value: formatNumber(t.summary_task_count), color: Color(hex: "f97316"))
                     }
                 }
                 .cardStyle()
@@ -266,6 +268,28 @@ struct AdminView: View {
                 .cardStyle()
             } else {
                 Text("加载中…").foregroundColor(.appMuted)
+            }
+
+            // Per-user breakdown
+            if let details = vm.tokenDetails {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("按用户分布")
+                        .font(.headline)
+                    ForEach(details.by_user) { user in
+                        userTokenRow(user)
+                    }
+                }
+                .cardStyle()
+
+                // Recent tasks
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("近期摘要任务")
+                        .font(.headline)
+                    ForEach(details.recent_tasks) { task in
+                        summaryTaskRow(task)
+                    }
+                }
+                .cardStyle()
             }
         }
     }
@@ -313,7 +337,84 @@ struct AdminView: View {
         case "meal_vision": return "膳食图像分析"
         case "health_summary": return "健康报告摘要"
         case "agent": return "智能 Agent"
+        case "omics_analysis": return "组学分析"
         default: return feature
+        }
+    }
+
+    private func userTokenRow(_ user: UserTokenItem) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(user.username ?? "未命名")
+                    .font(.subheadline.bold())
+                Text(user.phone)
+                    .font(.caption)
+                    .foregroundColor(.appMuted)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(formatNumber(user.total_tokens))
+                    .font(.subheadline.bold())
+                    .foregroundColor(.appPrimary)
+                HStack(spacing: 8) {
+                    Text("Audit: \(formatNumber(user.audit_tokens))")
+                        .font(.caption2)
+                    Text("摘要: \(formatNumber(user.summary_tokens))")
+                        .font(.caption2)
+                }
+                .foregroundColor(.appMuted)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func summaryTaskRow(_ task: SummaryTaskItem) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.username ?? "未知用户")
+                    .font(.subheadline.bold())
+                Text(task.task_id.prefix(8) + "…")
+                    .font(.caption.monospaced())
+                    .foregroundColor(.appMuted)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(taskStatusText(task.status))
+                    .font(.caption2).bold()
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(taskStatusColor(task.status)))
+                HStack(spacing: 4) {
+                    Text("\(formatNumber(task.token_used)) tokens")
+                        .font(.caption2)
+                    if let t = task.created_at {
+                        Text(formatTime(t))
+                            .font(.caption2)
+                    }
+                }
+                .foregroundColor(.appMuted)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func taskStatusText(_ status: String) -> String {
+        switch status {
+        case "done": return "完成"
+        case "failed": return "失败"
+        case "running": return "运行中"
+        case "pending": return "等待中"
+        default: return status
+        }
+    }
+
+    private func taskStatusColor(_ status: String) -> Color {
+        switch status {
+        case "done": return .appSuccess
+        case "failed": return .appDanger
+        case "running": return .appWarning
+        default: return .appMuted
         }
     }
 
