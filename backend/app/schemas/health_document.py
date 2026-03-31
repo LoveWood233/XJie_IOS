@@ -98,5 +98,18 @@ class SummaryProgressEvent(BaseModel):
     stage: str | None = None  # "l1" | "l2" | "l3"
     current: int | None = None
     total: int | None = None
+
+
+# ── Background task ──
+
+class SummaryTaskOut(BaseModel):
+    task_id: str
+    status: str  # pending | running | done | failed
+    stage: str | None = None
+    stage_current: int = 0
+    stage_total: int = 0
+    progress_pct: float = 0.0
+    token_used: int = 0
+    error_message: str | None = None
     delta: str | None = None
     text: str | None = None

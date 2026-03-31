@@ -7,6 +7,17 @@ struct HealthDataSummary: Decodable {
     let updated_at: String?
 }
 
+struct SummaryTaskResponse: Decodable {
+    let task_id: String
+    let status: String          // pending | running | done | failed
+    let stage: String?          // l1 | l2 | l3
+    let stage_current: Int?
+    let stage_total: Int?
+    let progress_pct: Double?
+    let token_used: Int?
+    let error_message: String?
+}
+
 struct DocumentListResponse: Decodable {
     let items: [HealthDocument]?
     let total: Int?

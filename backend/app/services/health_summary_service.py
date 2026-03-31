@@ -37,7 +37,8 @@ def _get_client() -> OpenAI:
     return OpenAI(**kwargs)
 
 
-def _llm_call(system: str, user: str, max_tokens: int = 4096) -> str:
+def _llm_call(system: str, user: str, max_tokens: int = 4096) -> tuple[str, int]:
+    """Call LLM and return (content, total_tokens)."""
     client = _get_client()
     resp = client.chat.completions.create(
         model="kimi-k2.5",
@@ -49,7 +50,10 @@ def _llm_call(system: str, user: str, max_tokens: int = 4096) -> str:
         temperature=0.6,
         extra_body={"thinking": {"type": "disabled"}},
     )
-    return resp.choices[0].message.content or ""
+    tokens = 0
+    if resp.usage:
+        tokens = (resp.usage.prompt_tokens or 0) + (resp.usage.completion_tokens or 0)
+    return resp.choices[0].message.content or "", tokens
 
 
 # ── Data helpers ─────────────────────────────────────────
@@ -131,8 +135,8 @@ def generate_l1(
     period_key: str,
     docs: list[HealthDocument],
     db: Session,
-) -> str:
-    """Generate or retrieve cached L1 summary for a specific date's documents."""
+) -> tuple[str, int]:
+    """Generate or retrieve cached L1 summary. Returns (text, tokens_used)."""
     # Check cache
     cached = db.execute(
         select(HealthDocumentSummary).where(
@@ -143,14 +147,14 @@ def generate_l1(
     ).scalars().first()
 
     if cached and cached.doc_count == len(docs):
-        return cached.summary_text
+        return cached.summary_text, 0
 
     # Generate
     data_text = _docs_to_text(docs)
     is_record = all(d.doc_type == "record" for d in docs)
     system = L1_RECORD_SYSTEM if is_record else L1_SYSTEM
 
-    summary = _llm_call(
+    summary, tokens = _llm_call(
         system,
         f"日期: {period_key}\n数据如下:\n\n{data_text}",
         max_tokens=1024,
@@ -176,7 +180,7 @@ def generate_l1(
         db.add(cached)
     db.flush()
 
-    return summary
+    return summary, tokens
 
 
 # ── L2: Per-year summary ─────────────────────────────────
@@ -197,8 +201,8 @@ def generate_l2(
     year: str,
     l1_summaries: dict[str, str],
     db: Session,
-) -> str:
-    """Generate or retrieve cached L2 summary for a year."""
+) -> tuple[str, int]:
+    """Generate or retrieve cached L2 summary. Returns (text, tokens_used)."""
     cached = db.execute(
         select(HealthDocumentSummary).where(
             HealthDocumentSummary.user_id == user_id,
@@ -209,7 +213,7 @@ def generate_l2(
 
     expected_count = len(l1_summaries)
     if cached and cached.doc_count == expected_count:
-        return cached.summary_text
+        return cached.summary_text, 0
 
     # Build input from L1 summaries
     parts = []
@@ -217,7 +221,7 @@ def generate_l2(
         parts.append(f"[{date_key}] {l1_summaries[date_key]}")
     combined = "\n\n".join(parts)
 
-    summary = _llm_call(
+    summary, tokens = _llm_call(
         L2_SYSTEM,
         f"年度: {year}年\n\n该年度各次检查/就诊摘要:\n\n{combined}",
         max_tokens=1024,
@@ -242,7 +246,7 @@ def generate_l2(
         db.add(cached)
     db.flush()
 
-    return summary
+    return summary, tokens
 
 
 # ── L3: Final longitudinal summary ──────────────────────
@@ -278,9 +282,9 @@ def generate_l3(
     if stream:
         return _stream_l3(user_id, user_msg, db)
     else:
-        summary = _llm_call(L3_SYSTEM, user_msg, max_tokens=4096)
+        summary, tokens = _llm_call(L3_SYSTEM, user_msg, max_tokens=4096)
         _save_l3(user_id, summary, db)
-        return summary
+        return summary, tokens
 
 
 def _stream_l3(user_id: int, user_msg: str, db: Session):
@@ -335,11 +339,13 @@ def run_full_pipeline(
     db: Session,
     stream: bool = False,
     progress_callback=None,
+    token_callback=None,
 ):
     """Run the full L1→L2→L3 pipeline.
 
     Args:
         progress_callback: Optional callable(stage, current, total) for progress updates.
+        token_callback: Optional callable(tokens_delta) to accumulate token usage.
         stream: If True, L3 returns a generator of SSE events.
     """
     # 1. Fetch all documents
@@ -368,7 +374,10 @@ def run_full_pipeline(
     for i, (date_key, group) in enumerate(date_groups.items()):
         if progress_callback:
             progress_callback("l1", i + 1, total_l1)
-        l1_results[date_key] = generate_l1(user_id, date_key, group, db)
+        text, tokens = generate_l1(user_id, date_key, group, db)
+        l1_results[date_key] = text
+        if token_callback and tokens:
+            token_callback(tokens)
     db.commit()
 
     # 4. L2: Per-year summaries
@@ -378,13 +387,22 @@ def run_full_pipeline(
     for i, (year, year_l1s) in enumerate(year_groups.items()):
         if progress_callback:
             progress_callback("l2", i + 1, total_l2)
-        l2_results[year] = generate_l2(user_id, year, year_l1s, db)
+        text, tokens = generate_l2(user_id, year, year_l1s, db)
+        l2_results[year] = text
+        if token_callback and tokens:
+            token_callback(tokens)
     db.commit()
 
     # 5. L3: Final summary
     if progress_callback:
         progress_callback("l3", 1, 1)
-    return generate_l3(user_id, l2_results, db, stream=stream)
+    result = generate_l3(user_id, l2_results, db, stream=stream)
+    if not stream and isinstance(result, tuple):
+        text, tokens = result
+        if token_callback and tokens:
+            token_callback(tokens)
+        return text
+    return result
 
 
 # ── Incremental update ───────────────────────────────────
@@ -409,3 +427,133 @@ def invalidate_for_date(user_id: int, date_key: str, db: Session):
         )
     )
     db.commit()
+
+
+# ── Background task runner ───────────────────────────────
+
+import secrets
+import threading
+
+from app.db.session import SessionLocal
+from app.models.health_document import SummaryTask
+
+
+def _generate_task_id() -> str:
+    return secrets.token_hex(8)
+
+
+def _compute_pct(stage: str, current: int, total: int, l1_total: int, l2_total: int) -> float:
+    """Compute overall progress percentage.  L1=60%, L2=25%, L3=15%."""
+    if stage == "l1" and l1_total > 0:
+        return round((current / l1_total) * 0.60, 3)
+    elif stage == "l2" and l2_total > 0:
+        return round(0.60 + (current / l2_total) * 0.25, 3)
+    elif stage == "l3":
+        return 0.85
+    return 0.0
+
+
+def start_summary_task(user_id: int) -> SummaryTask:
+    """Create a pending task and spawn a background thread."""
+    db = SessionLocal()
+    try:
+        # Reuse running task if exists
+        running = db.execute(
+            select(SummaryTask).where(
+                SummaryTask.user_id == user_id,
+                SummaryTask.status.in_(["pending", "running"]),
+            )
+        ).scalars().first()
+        if running:
+            task_snapshot = SummaryTask(
+                id=running.id, user_id=running.user_id,
+                status=running.status, stage=running.stage,
+                stage_current=running.stage_current,
+                stage_total=running.stage_total,
+                progress_pct=running.progress_pct,
+                token_used=running.token_used,
+            )
+            db.close()
+            return task_snapshot
+
+        task = SummaryTask(
+            id=_generate_task_id(),
+            user_id=user_id,
+            status="pending",
+        )
+        db.add(task)
+        db.commit()
+        db.refresh(task)
+        task_id = task.id
+    finally:
+        db.close()
+
+    t = threading.Thread(
+        target=_run_task_background,
+        args=(task_id, user_id),
+        daemon=True,
+    )
+    t.start()
+    return SummaryTask(id=task_id, user_id=user_id, status="pending",
+                       stage_current=0, stage_total=0, token_used=0,
+                       progress_pct=0.0)
+
+
+def _run_task_background(task_id: str, user_id: int):
+    """Execute the full pipeline in a background thread."""
+    db = SessionLocal()
+    try:
+        task = db.get(SummaryTask, task_id)
+        if not task:
+            return
+        task.status = "running"
+        db.commit()
+
+        totals: dict[str, int] = {"l1": 0, "l2": 0}
+
+        def progress_cb(stage: str, current: int, total: int):
+            totals[stage] = total
+            task.stage = stage
+            task.stage_current = current
+            task.stage_total = total
+            task.progress_pct = _compute_pct(
+                stage, current, total,
+                totals.get("l1", total), totals.get("l2", total),
+            )
+            task.updated_at = datetime.utcnow()
+            db.commit()
+
+        def token_cb(delta: int):
+            task.token_used = (task.token_used or 0) + delta
+            db.commit()
+
+        run_full_pipeline(
+            user_id, db, stream=False,
+            progress_callback=progress_cb,
+            token_callback=token_cb,
+        )
+
+        task.status = "done"
+        task.progress_pct = 1.0
+        task.stage = "l3"
+        task.stage_current = 1
+        task.stage_total = 1
+        db.commit()
+        logger.info("Summary task %s done, tokens=%d", task_id, task.token_used or 0)
+
+    except Exception as e:
+        logger.exception("Summary task %s failed", task_id)
+        try:
+            task = db.get(SummaryTask, task_id)
+            if task:
+                task.status = "failed"
+                task.error_message = str(e)[:500]
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+def get_task_status(task_id: str, db: Session) -> SummaryTask | None:
+    return db.get(SummaryTask, task_id)

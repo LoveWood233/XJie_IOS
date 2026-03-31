@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import get_current_user_id, get_db
-from app.models.health_document import HealthDocument, HealthSummary, WatchedIndicator
+from app.models.health_document import HealthDocument, HealthSummary, SummaryTask, WatchedIndicator
 from app.schemas.health_document import (
     HealthDocumentListOut,
     HealthDocumentOut,
@@ -28,6 +28,7 @@ from app.schemas.health_document import (
     IndicatorListOut,
     IndicatorTrend,
     IndicatorTrendOut,
+    SummaryTaskOut,
     TrendPoint,
     WatchedIndicatorIn,
     WatchedIndicatorOut,
@@ -237,7 +238,7 @@ def generate_summary(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
-    """Generate a new AI health summary using three-layer hierarchical pipeline."""
+    """Generate a new AI health summary using three-layer hierarchical pipeline (sync)."""
     from app.services.health_summary_service import run_full_pipeline
 
     result = run_full_pipeline(user_id, db, stream=False)
@@ -251,7 +252,48 @@ def generate_summary(
 
     if row:
         return HealthSummaryOut(summary_text=row.summary_text, updated_at=row.updated_at)
-    return HealthSummaryOut(summary_text=result, updated_at=None)
+    return HealthSummaryOut(summary_text=result if isinstance(result, str) else "", updated_at=None)
+
+
+@router.post("/summary/generate-async", response_model=SummaryTaskOut)
+def generate_summary_async(
+    user_id: int = Depends(get_current_user_id),
+):
+    """Submit an async background task to generate the AI health summary."""
+    from app.services.health_summary_service import start_summary_task
+
+    task = start_summary_task(user_id)
+    return SummaryTaskOut(
+        task_id=task.id,
+        status=task.status,
+        stage=task.stage,
+        stage_current=task.stage_current,
+        stage_total=task.stage_total,
+        progress_pct=task.progress_pct,
+        token_used=task.token_used or 0,
+    )
+
+
+@router.get("/summary/task/{task_id}", response_model=SummaryTaskOut)
+def get_summary_task(
+    task_id: str,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Query the status of a background summary generation task."""
+    task = db.get(SummaryTask, task_id)
+    if not task or task.user_id != user_id:
+        raise HTTPException(404, "Task not found")
+    return SummaryTaskOut(
+        task_id=task.id,
+        status=task.status,
+        stage=task.stage,
+        stage_current=task.stage_current,
+        stage_total=task.stage_total,
+        progress_pct=task.progress_pct,
+        token_used=task.token_used or 0,
+        error_message=task.error_message,
+    )
 
 
 @router.get("/summary/generate-stream")

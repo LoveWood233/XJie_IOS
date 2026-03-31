@@ -7,6 +7,8 @@ final class HealthBriefViewModel: ObservableObject {
     @Published var reports: HealthReports?
     @Published var aiSummary = ""
     @Published var summaryLoading = false
+    @Published var summaryProgress: Double = 0
+    @Published var summaryStage: String = ""
     @Published var errorMessage: String?
 
     private let api: APIServiceProtocol
@@ -34,11 +36,49 @@ final class HealthBriefViewModel: ObservableObject {
 
     func loadAISummary() async {
         summaryLoading = true
-        defer { summaryLoading = false }
+        summaryProgress = 0
+        summaryStage = "提交任务..."
+        defer { summaryLoading = false; summaryStage = "" }
+
         do {
-            let res: HealthDataSummary = try await api.post("/api/health-data/summary/generate")
-            guard !Task.isCancelled else { return }
-            aiSummary = res.summary_text ?? "暂无摘要"
+            // 1. Submit async task
+            let task: SummaryTaskResponse = try await api.post("/api/health-data/summary/generate-async")
+            let taskId = task.task_id
+
+            // 2. Poll every 3 seconds
+            while !Task.isCancelled {
+                try await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+
+                let status: SummaryTaskResponse = try await api.get("/api/health-data/summary/task/\(taskId)")
+
+                summaryProgress = status.progress_pct ?? 0
+
+                switch status.stage {
+                case "l1":
+                    summaryStage = "分析第 \(status.stage_current ?? 0)/\(status.stage_total ?? 0) 次检查..."
+                case "l2":
+                    summaryStage = "汇总第 \(status.stage_current ?? 0)/\(status.stage_total ?? 0) 年趋势..."
+                case "l3":
+                    summaryStage = "生成最终报告..."
+                default:
+                    summaryStage = "准备中..."
+                }
+
+                if status.status == "done" {
+                    // Fetch the final summary
+                    let result: HealthDataSummary = try await api.get("/api/health-data/summary")
+                    guard !Task.isCancelled else { return }
+                    aiSummary = result.summary_text ?? "暂无摘要"
+                    summaryProgress = 1.0
+                    return
+                }
+
+                if status.status == "failed" {
+                    aiSummary = "生成失败: \(status.error_message ?? "未知错误")"
+                    return
+                }
+            }
         } catch {
             guard !Task.isCancelled else { return }
             aiSummary = "获取失败，请重试"

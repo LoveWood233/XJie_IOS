@@ -190,11 +190,33 @@ struct HealthView: View {
                     .cornerRadius(8)
             }
 
+            // Progress bar during generation
+            if vm.summaryLoading {
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(value: vm.summaryProgress, total: 1.0)
+                        .tint(.appPrimary)
+                    HStack {
+                        Text(vm.summaryStage)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(Int(vm.summaryProgress * 100))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.appPrimary)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
             Button {
                 Task { await vm.loadAISummary() }
             } label: {
                 HStack {
-                    if vm.summaryLoading { ProgressView().tint(.appPrimary) }
+                    if vm.summaryLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.appPrimary)
+                    }
                     Text(vm.aiSummary.isEmpty ? "生成 AI 健康总结" : "重新生成")
                 }
                 .frame(maxWidth: .infinity)
