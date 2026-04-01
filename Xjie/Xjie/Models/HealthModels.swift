@@ -48,6 +48,15 @@ struct AbnormalFlag: Decodable, Identifiable {
     let ref_range: String?
 }
 
+struct IndicatorExplanation: Decodable {
+    let name: String
+    let brief: String
+    let detail: String
+    let normal_range: String?
+    let clinical_meaning: String?
+    let source: String
+}
+
 // MARK: - 健康简报
 
 struct TodayBriefing: Decodable {

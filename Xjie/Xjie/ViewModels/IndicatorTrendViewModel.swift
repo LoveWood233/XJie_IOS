@@ -5,6 +5,7 @@ final class IndicatorTrendViewModel: ObservableObject {
     @Published var allIndicators: [IndicatorInfo] = []
     @Published var watchedNames: [String] = []
     @Published var trends: [IndicatorTrend] = []
+    @Published var explanations: [String: IndicatorExplanation] = [:]
     @Published var loading = false
     @Published var trendLoading = false
     @Published var errorMessage: String?
@@ -87,6 +88,51 @@ final class IndicatorTrendViewModel: ObservableObject {
         } catch {
             guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 批量应用选择：对比 pending 与当前 watched，增删差异后刷新趋势
+    func applySelection(_ selected: Set<String>) async {
+        let current = Set(watchedNames)
+        let toAdd = selected.subtracting(current)
+        let toRemove = current.subtracting(selected)
+
+        for name in toRemove {
+            await unwatch(name)
+        }
+        for name in toAdd {
+            let category = allIndicators.first { $0.name == name }?.category
+            await watchSilent(name, category: category)
+        }
+
+        watchedNames = Array(selected)
+        if !watchedNames.isEmpty {
+            await fetchTrends(for: watchedNames)
+        } else {
+            trends = []
+        }
+    }
+
+    /// 静默 watch（不触发 fetchTrends，由 applySelection 统一刷新）
+    private func watchSilent(_ name: String, category: String?) async {
+        do {
+            let body = ["indicator_name": name, "category": category ?? ""]
+            let _: [String: String] = try await api.post("/api/health-data/indicators/watch", body: body)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 获取指标解释（优先知识库缓存）
+    func fetchExplanation(for name: String) async {
+        guard explanations[name] == nil else { return }
+        do {
+            let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
+            let resp: IndicatorExplanation = try await api.get("/api/health-data/indicators/\(encoded)/explain")
+            guard !Task.isCancelled else { return }
+            explanations[name] = resp
+        } catch {
+            // Silently fail — explanation is optional
         }
     }
 }

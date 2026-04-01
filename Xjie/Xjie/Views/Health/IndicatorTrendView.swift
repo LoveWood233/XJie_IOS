@@ -5,7 +5,9 @@ import Charts
 
 struct IndicatorTrendCard: View {
     let trend: IndicatorTrend
+    @ObservedObject var vm: IndicatorTrendViewModel
     @State private var selectedIndex: Int? = nil
+    @State private var showExplanation = false
 
     private var dateFormatter: DateFormatter {
         let f = DateFormatter()
@@ -43,11 +45,50 @@ struct IndicatorTrendCard: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                Button {
+                    showExplanation.toggle()
+                    if showExplanation {
+                        Task { await vm.fetchExplanation(for: trend.name) }
+                    }
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.caption)
+                        .foregroundColor(.appPrimary)
+                }
                 Spacer()
                 if let last = trend.points.last {
                     Text(String(format: "%.1f", last.value))
                         .font(.subheadline.bold())
                         .foregroundColor(last.abnormal ? .red : .appPrimary)
+                }
+            }
+
+            // Explanation
+            if showExplanation {
+                if let exp = vm.explanations[trend.name] {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(exp.brief)
+                            .font(.caption)
+                            .foregroundColor(.appText)
+                        if let range = exp.normal_range, !range.isEmpty {
+                            Text("参考范围: \(range)")
+                                .font(.caption2)
+                                .foregroundColor(.appMuted)
+                        }
+                        if let meaning = exp.clinical_meaning, !meaning.isEmpty {
+                            Text(meaning)
+                                .font(.caption2)
+                                .foregroundColor(.appMuted)
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.appPrimary.opacity(0.05))
+                    .cornerRadius(6)
+                } else {
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("加载解释中...").font(.caption).foregroundColor(.appMuted)
+                    }
                 }
             }
 
@@ -243,6 +284,7 @@ struct IndicatorTrendCard: View {
 struct IndicatorSelectorSheet: View {
     @ObservedObject var vm: IndicatorTrendViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var pendingNames: Set<String> = []
 
     // Group indicators by category
     private var grouped: [(String, [IndicatorInfo])] {
@@ -261,17 +303,15 @@ struct IndicatorSelectorSheet: View {
                     Section(category) {
                         ForEach(indicators) { ind in
                             Button {
-                                Task {
-                                    if vm.watchedNames.contains(ind.name) {
-                                        await vm.unwatch(ind.name)
-                                    } else {
-                                        await vm.watch(ind.name, category: ind.category)
-                                    }
+                                if pendingNames.contains(ind.name) {
+                                    pendingNames.remove(ind.name)
+                                } else {
+                                    pendingNames.insert(ind.name)
                                 }
                             } label: {
                                 HStack {
-                                    Image(systemName: vm.watchedNames.contains(ind.name) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(vm.watchedNames.contains(ind.name) ? .appPrimary : .secondary)
+                                    Image(systemName: pendingNames.contains(ind.name) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(pendingNames.contains(ind.name) ? .appPrimary : .secondary)
                                     Text(ind.name)
                                         .foregroundColor(.primary)
                                     Spacer()
@@ -288,9 +328,15 @@ struct IndicatorSelectorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") { dismiss() }
+                    Button("完成") {
+                        Task { await vm.applySelection(pendingNames) }
+                        dismiss()
+                    }
                 }
             }
+        }
+        .onAppear {
+            pendingNames = Set(vm.watchedNames)
         }
     }
 }
@@ -342,7 +388,7 @@ struct IndicatorTrendSection: View {
                 .padding(.vertical, 20)
             } else {
                 ForEach(vm.trends) { trend in
-                    IndicatorTrendCard(trend: trend)
+                    IndicatorTrendCard(trend: trend, vm: vm)
                 }
             }
         }

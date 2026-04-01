@@ -110,3 +110,20 @@ class HealthDocument(Base):
         Index("ix_health_doc_user_type", "user_id", "doc_type"),
         Index("ix_health_doc_user_date", "user_id", "doc_date"),
     )
+
+
+class IndicatorKnowledge(Base):
+    """指标知识库 — 缓存指标的专业解释，优先本地匹配，未命中时 AI 生成后存入。"""
+
+    __tablename__ = "indicator_knowledge"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    alias: Mapped[str | None] = mapped_column(String(256), nullable=True)  # 如 "谷丙转氨酶,ALT,GPT"
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    brief: Mapped[str] = mapped_column(Text, nullable=False, default="")  # 一句话解释
+    detail: Mapped[str] = mapped_column(Text, nullable=False, default="")  # 2-3 句详细说明
+    normal_range: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    clinical_meaning: Mapped[str | None] = mapped_column(Text, nullable=True)  # 偏高/偏低代表什么
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="ai")  # "manual" | "ai"
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

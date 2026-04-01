@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import get_current_user_id, get_db
-from app.models.health_document import HealthDocument, HealthSummary, SummaryTask, WatchedIndicator
+from app.models.health_document import HealthDocument, HealthSummary, SummaryTask, WatchedIndicator, IndicatorKnowledge
 from app.schemas.health_document import (
     HealthDocumentListOut,
     HealthDocumentOut,
@@ -757,3 +757,80 @@ def unwatch_indicator(
     )
     db.commit()
     return {"ok": True}
+
+
+# ─── Indicator Knowledge Base ────────────────────────────
+
+@router.get("/indicators/{indicator_name}/explain")
+def explain_indicator(
+    indicator_name: str,
+    db: Session = Depends(get_db),
+):
+    """Return indicator explanation. Check local knowledge base first, fallback to AI."""
+    # 1. Check local knowledge base
+    cached = db.execute(
+        select(IndicatorKnowledge).where(IndicatorKnowledge.name == indicator_name)
+    ).scalars().first()
+
+    if cached:
+        return {
+            "name": cached.name,
+            "brief": cached.brief,
+            "detail": cached.detail,
+            "normal_range": cached.normal_range,
+            "clinical_meaning": cached.clinical_meaning,
+            "source": cached.source,
+        }
+
+    # 2. Fallback: AI generate
+    client = _get_llm_client()
+    resp = client.chat.completions.create(
+        model="kimi-k2.5",
+        messages=[
+            {"role": "system", "content": (
+                "你是医学检验指标专家。用中文回答。返回 JSON 格式，包含以下字段：\n"
+                '{"brief": "一句话解释该指标是什么", '
+                '"detail": "2-3句详细说明其临床意义", '
+                '"normal_range": "正常参考范围", '
+                '"clinical_meaning": "偏高和偏低分别代表什么"}\n'
+                "不要使用任何 emoji。不要添加额外文字。"
+            )},
+            {"role": "user", "content": f"请解释医学检验指标：{indicator_name}"},
+        ],
+        max_tokens=512,
+        temperature=0.3,
+        extra_body={"thinking": {"type": "disabled"}},
+    )
+
+    text = resp.choices[0].message.content or ""
+    # Parse JSON from LLM response
+    try:
+        # Try to extract JSON from the response
+        json_match = re.search(r"\{.*\}", text, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group())
+        else:
+            data = {"brief": text[:200], "detail": text, "normal_range": "", "clinical_meaning": ""}
+    except json.JSONDecodeError:
+        data = {"brief": text[:200], "detail": text, "normal_range": "", "clinical_meaning": ""}
+
+    # 3. Cache into knowledge base
+    knowledge = IndicatorKnowledge(
+        name=indicator_name,
+        brief=data.get("brief", ""),
+        detail=data.get("detail", ""),
+        normal_range=data.get("normal_range", ""),
+        clinical_meaning=data.get("clinical_meaning", ""),
+        source="ai",
+    )
+    db.add(knowledge)
+    db.commit()
+
+    return {
+        "name": indicator_name,
+        "brief": knowledge.brief,
+        "detail": knowledge.detail,
+        "normal_range": knowledge.normal_range,
+        "clinical_meaning": knowledge.clinical_meaning,
+        "source": "ai",
+    }
