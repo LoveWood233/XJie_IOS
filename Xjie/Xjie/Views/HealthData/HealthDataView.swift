@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 /// 健康数据中心 — 对应小程序 pages/health-data/health-data
 struct HealthDataView: View {
     @StateObject private var vm = HealthDataViewModel()
+    @StateObject private var trendVM = IndicatorTrendViewModel()
 
     var body: some View {
         NavigationStack {
@@ -11,6 +12,10 @@ struct HealthDataView: View {
                 VStack(spacing: 12) {
                     // AI 总结卡片
                     aiSummaryCard
+
+                    // 指标趋势图表
+                    IndicatorTrendSection(vm: trendVM)
+                        .cardStyle()
 
                     // 历史病例
                     NavigationLink(destination: MedicalRecordListView()) {
@@ -41,8 +46,14 @@ struct HealthDataView: View {
             .background(Color.appBackground)
             .navigationTitle("健康数据")
             .navigationBarTitleDisplayMode(.inline)
-            .refreshable { await vm.fetchAll() }
-            .task { await vm.fetchAll() }
+            .refreshable {
+                await vm.fetchAll()
+                await trendVM.fetchIndicators()
+            }
+            .task {
+                await vm.fetchAll()
+                await trendVM.fetchIndicators()
+            }
             .overlay {
                 if vm.loading { ProgressView("加载中...") }
             }
@@ -97,10 +108,7 @@ struct HealthDataView: View {
                             .foregroundColor(.appMuted)
                     }
                 } else if !vm.summary.isEmpty {
-                    Text(vm.summary)
-                        .font(.subheadline)
-                        .foregroundColor(.appText)
-                        .multilineTextAlignment(.leading)
+                    MarkdownTextView(text: vm.summary)
                     if !vm.summaryUpdatedAt.isEmpty {
                         Text("更新于 \(vm.summaryUpdatedAt)")
                             .font(.caption2)

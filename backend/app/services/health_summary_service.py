@@ -28,6 +28,30 @@ from app.models.health_document import (
 
 logger = logging.getLogger(__name__)
 
+# ── Emoji stripper ────────────────────────────────────────
+
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # emoticons
+    "\U0001F300-\U0001F5FF"  # symbols & pictographs
+    "\U0001F680-\U0001F6FF"  # transport & map
+    "\U0001F1E0-\U0001F1FF"  # flags
+    "\U0001F900-\U0001F9FF"  # supplemental
+    "\U0001FA00-\U0001FA6F"  # chess, etc.
+    "\U0001FA70-\U0001FAFF"  # symbols extended
+    "\U00002702-\U000027B0"  # dingbats
+    "\U000024C2-\U0001F251"  # enclosed chars
+    "\U0000FE00-\U0000FE0F"  # variation selectors
+    "\U0000200D"             # ZWJ
+    "]+",
+    flags=re.UNICODE,
+)
+
+def _strip_emoji(text: str) -> str:
+    """Remove emoji characters from text."""
+    return _EMOJI_RE.sub("", text)
+
+
 # ── LLM client ──────────────────────────────────────────
 
 def _get_client() -> OpenAI:
@@ -53,7 +77,7 @@ def _llm_call(system: str, user: str, max_tokens: int = 4096) -> tuple[str, int]
     tokens = 0
     if resp.usage:
         tokens = (resp.usage.prompt_tokens or 0) + (resp.usage.completion_tokens or 0)
-    return resp.choices[0].message.content or "", tokens
+    return _strip_emoji(resp.choices[0].message.content or ""), tokens
 
 
 # ── Data helpers ─────────────────────────────────────────
@@ -255,14 +279,16 @@ L3_SYSTEM = """\
 你是 Xjie AI 健康分析师。请根据用户多年的年度健康摘要，生成一份纵向健康总结报告。
 
 报告要求：
-1. 用中文，Markdown 格式
+1. 用中文，Markdown 格式（仅使用标题、加粗、无序/有序列表，绝对禁止使用 Markdown 表格）
 2. 先给出 **整体健康评分**（[正常] / [需关注] / [需就医]）
-3. **核心健康趋势**：哪些指标多年持续异常、哪些恶化、哪些改善
+3. **核心健康趋势**：哪些指标多年持续异常、哪些恶化、哪些改善，用列表分条列出
 4. **当前重点关注项**：列出最新一次检查中的异常指标
 5. 给出 3-5 条 **个性化健康建议**（饮食、运动、就医建议）
 6. 如有危急值或持续恶化趋势，务必突出提醒
 7. 用温和专业的语气，避免过度恐吓
-8. 控制在 800 字以内"""
+8. 控制在 800 字以内
+
+重要：不要使用任何 emoji 符号（如 🟢🟡🔴 等），只使用纯文字。不要使用 Markdown 表格语法。"""
 
 
 def generate_l3(
@@ -311,7 +337,7 @@ def _stream_l3(user_id: int, user_msg: str, db: Session):
             emitted.append(delta.content)
             yield json.dumps({"type": "token", "delta": delta.content}, ensure_ascii=False)
 
-    final_text = "".join(emitted).strip()
+    final_text = _strip_emoji("".join(emitted).strip())
     _save_l3(user_id, final_text, db)
     yield json.dumps({"type": "done", "text": final_text}, ensure_ascii=False)
 

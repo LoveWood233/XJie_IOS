@@ -183,8 +183,7 @@ struct HealthView: View {
             Label("AI 健康总结", systemImage: "brain.head.profile").font(.headline)
 
             if !vm.aiSummary.isEmpty {
-                Text(vm.aiSummary)
-                    .font(.subheadline)
+                MarkdownTextView(text: vm.aiSummary)
                     .padding(12)
                     .background(Color.appPrimary.opacity(0.05))
                     .cornerRadius(8)

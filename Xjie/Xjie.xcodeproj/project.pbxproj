@@ -83,6 +83,7 @@
 		'A10071' = {isa = PBXBuildFile; fileRef = B10071; };
 		'A10072' = {isa = PBXBuildFile; fileRef = B10072; };
 		'A10073' = {isa = PBXBuildFile; fileRef = B10073; };
+		'A10074' = {isa = PBXBuildFile; fileRef = B10074; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -175,6 +176,7 @@
 		'B10071' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		'B10072' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlagModels.swift; sourceTree = "<group>"; };
 		'B10073' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlagService.swift; sourceTree = "<group>"; };
+		'B10074' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -443,6 +445,7 @@
 				B10060,
 				B10061,
 				B10062,
+				B10074,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -635,6 +638,7 @@
 				'A10071',
 				'A10072',
 				'A10073',
+				'A10074',
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
