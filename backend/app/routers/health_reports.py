@@ -362,9 +362,9 @@ def health_ai_summary(
                 model=provider.text_model,
                 messages=messages,
                 max_tokens=16000,
-                temperature=settings.LLM_TEMPERATURE,
                 stream=True,
                 stream_options={"include_usage": True},
+                **settings.llm_temperature_kwargs(provider.text_model),
             )
             for chunk in stream:
                 if getattr(chunk, "usage", None):

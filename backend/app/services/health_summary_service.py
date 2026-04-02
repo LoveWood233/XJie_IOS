@@ -78,8 +78,8 @@ def _llm_call(system: str, user: str, max_tokens: int = 4096) -> tuple[str, int]
             {"role": "user", "content": user},
         ],
         max_tokens=max_tokens,
-        temperature=settings.LLM_TEMPERATURE,
         extra_body={"thinking": {"type": "disabled"}},
+        **settings.llm_temperature_kwargs(),
     )
     tokens = 0
     if resp.usage:
@@ -344,10 +344,10 @@ def _stream_l3(user_id: int, user_msg: str, db: Session):
             {"role": "user", "content": user_msg},
         ],
         max_tokens=4096,
-        temperature=settings.LLM_TEMPERATURE,
         stream=True,
         stream_options={"include_usage": True},
         extra_body={"thinking": {"type": "disabled"}},
+        **settings.llm_temperature_kwargs(),
     )
 
     for chunk in stream:

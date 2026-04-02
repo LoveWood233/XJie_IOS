@@ -20,7 +20,20 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str | None = None  # e.g. https://api.moonshot.cn/v1 for Kimi
     OPENAI_MODEL_TEXT: str = "kimi-k2.5"
     OPENAI_MODEL_VISION: str = "kimi-k2.5"
-    LLM_TEMPERATURE: float = 0.6  # Kimi K2.5; override in .env if API changes
+    LLM_TEMPERATURE: float | None = None  # None = use model default; kimi-k2.5 does NOT allow setting temperature
+
+    def llm_temperature_kwargs(self, model: str | None = None) -> dict:
+        """Return {'temperature': x} or {} depending on model.
+
+        kimi-k2.5 does not allow temperature to be set at all.
+        moonshot-v1-* defaults to 0.0, kimi-k2 defaults to 0.6.
+        """
+        m = (model or self.OPENAI_MODEL_TEXT).lower()
+        if m.startswith("kimi-k2.5"):
+            return {}  # kimi-k2.5: temperature is not configurable
+        if self.LLM_TEMPERATURE is not None:
+            return {"temperature": self.LLM_TEMPERATURE}
+        return {}
 
     JWT_SECRET: str = "change_me"
     JWT_EXPIRES_MIN: int = 1440  # Legacy compat

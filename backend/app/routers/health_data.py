@@ -62,8 +62,8 @@ def _llm_vision_call(image_b64: str, system_prompt: str, user_prompt: str) -> st
             ]},
         ],
         max_tokens=4096,
-        temperature=settings.LLM_TEMPERATURE,
         extra_body={"thinking": {"type": "disabled"}},
+        **settings.llm_temperature_kwargs(settings.OPENAI_MODEL_VISION),
     )
     return resp.choices[0].message.content or ""
 
@@ -128,7 +128,7 @@ def _generate_doc_summary(csv_data: dict | None, abnormal_flags: list | None, do
                 {"role": "user", "content": f"以下是{type_label}数据：\n{data_text}{abnormal_text}"},
             ],
             max_tokens=2048,
-            temperature=settings.LLM_TEMPERATURE,
+            **settings.llm_temperature_kwargs(),
         )
         raw = resp.choices[0].message.content or ""
         data = _parse_json_from_llm(raw)
@@ -870,8 +870,8 @@ def explain_indicator(
             {"role": "user", "content": f"请解释医学检验指标：{indicator_name}"},
         ],
         max_tokens=512,
-        temperature=settings.LLM_TEMPERATURE,
         extra_body={"thinking": {"type": "disabled"}},
+        **settings.llm_temperature_kwargs(),
     )
 
     text = resp.choices[0].message.content or ""
