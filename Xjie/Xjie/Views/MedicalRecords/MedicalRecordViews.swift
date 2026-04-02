@@ -63,28 +63,36 @@ struct MedicalRecordListView: View {
     private func documentRow(_ item: HealthDocument) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.name ?? "未命名")
-                    .font(.subheadline).bold()
-                    .foregroundColor(.appText)
-                HStack(spacing: 6) {
-                    SourceTag(sourceType: item.source_type)
-                    StatusTag(status: item.extraction_status)
-                    if let date = item.doc_date {
-                        Text(date).font(.caption2).foregroundColor(.appMuted)
-                    }
+                if let date = item.doc_date, !date.isEmpty {
+                    Text(String(date.prefix(10)))
+                        .font(.subheadline).bold()
+                        .foregroundColor(.appText)
+                } else {
+                    Text(item.name ?? "未命名")
+                        .font(.subheadline).bold()
+                        .foregroundColor(.appText)
+                }
+                if let brief = item.ai_brief, !brief.isEmpty {
+                    Text(brief)
+                        .font(.caption)
+                        .foregroundColor(.appMuted)
+                        .lineLimit(1)
                 }
             }
             Spacer()
-            Button {
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(.appMuted)
+        }
+        .cardStyle()
+        .contextMenu {
+            Button(role: .destructive) {
                 vm.deleteId = item.id
                 vm.showDeleteAlert = true
             } label: {
-                Text("删除")
-                    .font(.caption)
-                    .foregroundColor(.appDanger)
+                Label("删除", systemImage: "trash")
             }
         }
-        .cardStyle()
     }
 
     private var emptyState: some View {
@@ -100,28 +108,63 @@ struct MedicalRecordListView: View {
 struct MedicalRecordDetailView: View {
     let docId: String
     @StateObject private var vm = DocumentDetailViewModel()
+    @State private var showOriginal = false
 
     var body: some View {
         ScrollView {
             if let doc = vm.doc {
                 VStack(alignment: .leading, spacing: 12) {
-                    // 标题 — CODE-01: 使用共享标签组件
+                    // 标题
                     VStack(alignment: .leading, spacing: 4) {
                         Text(doc.name ?? "病例详情").font(.title3).bold()
-                        HStack(spacing: 6) {
-                            SourceDetailTag(sourceType: doc.source_type)
-                            StatusDetailTag(status: doc.extraction_status)
+                        if let date = doc.doc_date, !date.isEmpty {
+                            Text(String(date.prefix(10)))
+                                .font(.caption)
+                                .foregroundColor(.appMuted)
                         }
                     }
                     .cardStyle()
 
-                    // CSV 数据表格 — CODE-01: 使用共享 CSVTableView
-                    if let csv = doc.csv_data, let columns = csv.columns, let rows = csv.rows {
-                        CSVTableView(title: "病例数据", icon: "tablecells", columns: columns, rows: rows)
-                    } else {
-                        Text("暂无提取数据（LLM 处理中）")
-                            .foregroundColor(.appMuted)
-                            .cardStyle()
+                    // AI 总结内容
+                    if let summary = doc.ai_summary, !summary.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("AI 整理", systemImage: "sparkles")
+                                .font(.headline)
+                                .foregroundColor(.appPrimary)
+                            Text(summary)
+                                .font(.body)
+                                .foregroundColor(.appText)
+                                .lineSpacing(4)
+                        }
+                        .cardStyle()
+                    } else if vm.loading {
+                        HStack {
+                            ProgressView().controlSize(.small)
+                            Text("正在生成 AI 总结...").font(.caption).foregroundColor(.appMuted)
+                        }
+                        .cardStyle()
+                    }
+
+                    // 查看原件按钮
+                    if let csv = doc.csv_data, csv.columns != nil {
+                        Button {
+                            withAnimation { showOriginal.toggle() }
+                        } label: {
+                            HStack {
+                                Image(systemName: showOriginal ? "eye.slash" : "eye")
+                                Text(showOriginal ? "收起原件" : "查看原件")
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.appPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(10)
+                            .background(Color.appPrimary.opacity(0.08))
+                            .cornerRadius(8)
+                        }
+
+                        if showOriginal, let columns = csv.columns, let rows = csv.rows {
+                            CSVTableView(title: "病例数据", icon: "tablecells", columns: columns, rows: rows)
+                        }
                     }
                 }
                 .padding(.horizontal, 16)

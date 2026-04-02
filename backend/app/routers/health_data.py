@@ -87,6 +87,61 @@ def _parse_json_from_llm(raw: str) -> dict:
     return {}
 
 
+def _generate_doc_summary(csv_data: dict | None, abnormal_flags: list | None, doc_type: str) -> tuple[str, str]:
+    """Use LLM to generate a brief (≤10 chars) and detailed summary from extracted data.
+
+    Returns (ai_brief, ai_summary). On failure returns empty strings.
+    """
+    if not csv_data or not csv_data.get("rows"):
+        return "", ""
+
+    # Build a text representation of the data
+    columns = csv_data.get("columns", [])
+    rows = csv_data.get("rows", [])
+    lines = []
+    for row in rows[:50]:  # cap to avoid token overflow
+        pairs = [f"{columns[i]}: {row[i]}" for i in range(min(len(columns), len(row))) if row[i]]
+        lines.append(" | ".join(pairs))
+    data_text = "\n".join(lines)
+
+    abnormal_text = ""
+    if abnormal_flags:
+        abnormal_text = "\n异常项: " + ", ".join(
+            f.get("field", f.get("name", "")) for f in abnormal_flags if isinstance(f, dict)
+        )
+
+    type_label = "病例" if doc_type == "record" else "体检报告"
+
+    client = _get_llm_client()
+    try:
+        resp = client.chat.completions.create(
+            model=settings.OPENAI_MODEL_TEXT,
+            messages=[
+                {"role": "system", "content": (
+                    f"你是医疗文档整理专家。用户上传了一份{type_label}，下面是从中提取的结构化数据。"
+                    "请完成两个任务：\n"
+                    "1. brief: 用10个字以内概括这份文档的核心内容（如\"甲功五项复查\"、\"肝功能异常\"、\"年度体检正常\"）\n"
+                    "2. summary: 用通俗易懂的语言整理这份文档的完整内容，分段清晰，重点突出异常项和医嘱建议。"
+                    "不要使用表格格式，用自然段落书写。\n\n"
+                    '返回严格JSON: {"brief":"≤10字概括","summary":"详细整理内容"}'
+                )},
+                {"role": "user", "content": f"以下是{type_label}数据：\n{data_text}{abnormal_text}"},
+            ],
+            max_tokens=2048,
+            temperature=settings.LLM_TEMPERATURE,
+        )
+        raw = resp.choices[0].message.content or ""
+        data = _parse_json_from_llm(raw)
+        brief = (data.get("brief") or "")[:20]
+        summary = data.get("summary") or ""
+        if brief and summary:
+            return brief, summary
+    except Exception as e:
+        logger.warning("LLM doc summary generation failed: %s", e)
+
+    return "", ""
+
+
 def _doc_to_out(doc: HealthDocument) -> HealthDocumentOut:
     return HealthDocumentOut(
         id=str(doc.id),
@@ -97,6 +152,8 @@ def _doc_to_out(doc: HealthDocument) -> HealthDocumentOut:
         doc_date=doc.doc_date.isoformat() if doc.doc_date else None,
         csv_data=doc.csv_data,
         abnormal_flags=doc.abnormal_flags,
+        ai_brief=doc.ai_brief,
+        ai_summary=doc.ai_summary,
         extraction_status=doc.extraction_status,
         created_at=doc.created_at,
     )
@@ -402,6 +459,9 @@ def upload_document(
         except ValueError:
             pass
 
+    # Generate AI summary from extracted data
+    ai_brief, ai_summary = _generate_doc_summary(csv_data, abnormal_flags, doc_type)
+
     doc = HealthDocument(
         user_id=user_id,
         doc_type=doc_type,
@@ -412,6 +472,8 @@ def upload_document(
         original_file_path=f"data:base64:{filename}",  # placeholder
         csv_data=csv_data,
         abnormal_flags=abnormal_flags,
+        ai_brief=ai_brief or None,
+        ai_summary=ai_summary or None,
         extraction_status="done",
     )
     db.add(doc)
@@ -459,6 +521,16 @@ def get_document(
 
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Lazy-generate AI summary for legacy docs that don't have one yet
+    if not doc.ai_summary and doc.csv_data:
+        ai_brief, ai_summary = _generate_doc_summary(doc.csv_data, doc.abnormal_flags, doc.doc_type)
+        if ai_summary:
+            doc.ai_brief = ai_brief or None
+            doc.ai_summary = ai_summary
+            db.commit()
+            db.refresh(doc)
+
     return _doc_to_out(doc)
 
 

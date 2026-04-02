@@ -25,6 +25,8 @@ class HealthDocumentOut(BaseModel):
     doc_date: str | None = None
     csv_data: dict | None = None
     abnormal_flags: list | None = None
+    ai_brief: str | None = None
+    ai_summary: str | None = None
     extraction_status: str
     created_at: datetime
 

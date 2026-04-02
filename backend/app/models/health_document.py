@@ -103,6 +103,8 @@ class HealthDocument(Base):
     original_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)  # path to original photo/file
     csv_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # extracted structured data
     abnormal_flags: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # for exam reports: [{field, value, ref_range, is_abnormal}]
+    ai_brief: Mapped[str | None] = mapped_column(String(20), nullable=True)  # ≤10字简要总结
+    ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)  # AI 整理后的详细内容
     extraction_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")  # pending | done | failed
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

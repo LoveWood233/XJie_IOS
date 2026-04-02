@@ -23,7 +23,7 @@ struct IndicatorTrendCard: View {
 
     private var detailFormatter: DateFormatter {
         let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
+        f.dateFormat = "yyyy年M月d日"
         return f
     }
 
@@ -154,19 +154,26 @@ struct IndicatorTrendCard: View {
                         RuleMark(x: .value("选中", sel.date))
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                             .foregroundStyle(.gray.opacity(0.6))
-                            .annotation(position: .top, spacing: 4) {
+                        PointMark(
+                            x: .value("选中", sel.date),
+                            y: .value("选中值", sel.value)
+                        )
+                        .foregroundStyle(sel.abnormal ? .red : Color.appPrimary)
+                        .symbolSize(80)
+                        .annotation(position: .automatic, spacing: 6) {
+                                let color: Color = sel.abnormal ? .red : .appPrimary
                                 VStack(spacing: 2) {
                                     Text(detailFormatter.string(from: sel.date))
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.secondary)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(color)
                                     HStack(spacing: 2) {
                                         Text(String(format: "%.2f", sel.value))
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundColor(sel.abnormal ? .red : .appPrimary)
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(color)
                                         if let unit = trend.unit, !unit.isEmpty {
                                             Text(unit)
-                                                .font(.system(size: 9))
-                                                .foregroundColor(.secondary)
+                                                .font(.system(size: 10))
+                                                .foregroundColor(color)
                                         }
                                     }
                                     if sel.abnormal {
@@ -185,12 +192,6 @@ struct IndicatorTrendCard: View {
                                         .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
                                 )
                             }
-                        PointMark(
-                            x: .value("选中", sel.date),
-                            y: .value("选中值", sel.value)
-                        )
-                        .foregroundStyle(sel.abnormal ? .red : Color.appPrimary)
-                        .symbolSize(80)
                     }
                 }
                 .chartXAxis {

@@ -32,6 +32,8 @@ struct HealthDocument: Decodable, Identifiable {
     let doc_date: String?
     let csv_data: CSVData?
     let abnormal_flags: [AbnormalFlag]?
+    let ai_brief: String?
+    let ai_summary: String?
 }
 
 struct CSVData: Decodable {

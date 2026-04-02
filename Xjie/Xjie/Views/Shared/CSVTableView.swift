@@ -10,13 +10,14 @@ struct CSVTableView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: icon).font(.headline)
+            Label(title, systemImage: icon).font(.headline).foregroundColor(.appText)
             ScrollView(.horizontal) {
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
                         ForEach(columns, id: \.self) { col in
                             Text(col)
                                 .font(.caption.bold())
+                                .foregroundColor(.appText)
                                 .frame(minWidth: 80).padding(6)
                                 .background(Color.appPrimary.opacity(0.1))
                         }
@@ -27,6 +28,7 @@ struct CSVTableView: View {
                             ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                                 Text(cell)
                                     .font(.caption)
+                                    .foregroundColor(abnormal ? .appDanger : .appText)
                                     .frame(minWidth: 80).padding(6)
                                     .background(abnormal ? Color.appDanger.opacity(0.05) : Color.clear)
                             }
