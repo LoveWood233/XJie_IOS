@@ -304,8 +304,8 @@ def _parse_structured_response(raw: str) -> dict:
 
 class OpenAIProvider(LLMProvider):
     provider_name = "openai"
-    text_model = "kimi-k2.5"
-    vision_model = "kimi-k2.5"
+    text_model = settings.OPENAI_MODEL_TEXT
+    vision_model = settings.OPENAI_MODEL_VISION
 
     def __init__(self) -> None:
         kwargs: dict = {"api_key": settings.OPENAI_API_KEY}

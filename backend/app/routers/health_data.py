@@ -53,7 +53,7 @@ def _llm_vision_call(image_b64: str, system_prompt: str, user_prompt: str) -> st
     client = _get_llm_client()
     data_url = f"data:image/jpeg;base64,{image_b64}"
     resp = client.chat.completions.create(
-        model="kimi-k2.5",
+        model=settings.OPENAI_MODEL_VISION,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": [
@@ -785,7 +785,7 @@ def explain_indicator(
     # 2. Fallback: AI generate
     client = _get_llm_client()
     resp = client.chat.completions.create(
-        model="kimi-k2.5",
+        model=settings.OPENAI_MODEL_TEXT,
         messages=[
             {"role": "system", "content": (
                 "你是医学检验指标专家。用中文回答。返回 JSON 格式，包含以下字段：\n"

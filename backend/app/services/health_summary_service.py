@@ -72,7 +72,7 @@ def _llm_call(system: str, user: str, max_tokens: int = 4096) -> tuple[str, int]
     """Call LLM and return (content, total_tokens)."""
     client = _get_client()
     resp = client.chat.completions.create(
-        model="kimi-k2.5",
+        model=settings.OPENAI_MODEL_TEXT,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -338,7 +338,7 @@ def _stream_l3(user_id: int, user_msg: str, db: Session):
     emitted: list[str] = []
 
     stream = client.chat.completions.create(
-        model="kimi-k2.5",
+        model=settings.OPENAI_MODEL_TEXT,
         messages=[
             {"role": "system", "content": L3_SYSTEM},
             {"role": "user", "content": user_msg},
