@@ -6,6 +6,95 @@
 
 ---
 
+## 2026-04-03 — v1.4.0 AI 文档摘要 + Kimi K2.5 温度修复 + UI 修复
+
+### AI 文档摘要系统（全栈）✅
+
+**后端**
+- `health_document.py` (model)：新增 `ai_brief` (VARCHAR(20)) + `ai_summary` (TEXT) 两列
+- `health_document.py` (schema)：`HealthDocumentOut` 新增 `ai_brief` / `ai_summary` 字段
+- `health_data.py`：新增 `_generate_doc_summary(csv_data, abnormal_flags, doc_type)` 函数
+  - 调用 LLM 生成 JSON `{"brief":"≤10字","summary":"详细内容"}`
+  - 上传文档时自动生成摘要
+  - `GET /documents/{doc_id}` 对历史文档进行懒加载生成（首次访问时触发）
+- DB 迁移：`ALTER TABLE health_documents ADD COLUMN ai_brief VARCHAR(20); ADD COLUMN ai_summary TEXT;`
+
+**iOS 端**
+- `HealthModels.swift`：`HealthDocument` 新增 `ai_brief: String?` + `ai_summary: String?`
+- `MedicalRecordViews.swift`：
+  - 列表只显示日期 + ai_brief，删除改为 contextMenu 长按操作
+  - 详情页主显 AI 摘要，"查看原件"/"收起原件" 按钮切换原始 CSV 数据
+- `ExamReportViews.swift`：
+  - 列表显示日期 + ai_brief + 异常指标数 Badge
+  - 详情页 AI 摘要 + 异常警示 Banner + "查看原件" 切换
+
+### 指标趋势图 Tooltip 修复 ✅
+- `IndicatorTrendView.swift`：Tooltip 从 `RuleMark + .annotation(position: .top)` 改为 `PointMark + .annotation(position: .automatic, spacing: 6)`
+- 日期格式：`yyyy-MM-dd` → `yyyy年M月d日`，字号增大（date 11pt, value 13pt, unit 10pt）
+- 颜色方案：正常值 `Color.appPrimary`（蓝色），异常值 `.red`，解决暗色背景下灰色文字不可见
+
+### CSVTableView 文字可见性修复 ✅
+- `CSVTableView.swift`：为 Label 标题、表头、正常单元格添加 `.foregroundColor(.appText)`
+- 异常行单元格使用 `.foregroundColor(.appDanger)`
+
+### AI 助手更名 ✅
+- 全局搜索替换：小杰 → 小捷（`933c7f3`）
+
+### Gemini 清理 + 模型名集中化 ✅
+- 移除 `gemini_provider.py` 及相关代码
+- 模型名统一使用 `settings.OPENAI_MODEL_TEXT` / `settings.OPENAI_MODEL_VISION`（`81db247`）
+
+### Kimi K2.5 Temperature 终极修复 ✅
+
+**问题根因**：查阅 Kimi 官方 API 文档确认——`kimi-k2.5` 模型**不允许设置** temperature、top_p、n、presence_penalty、frequency_penalty 参数，必须完全省略。
+
+**解决方案**：
+- `config.py` 新增 `llm_temperature_kwargs(model)` 方法：
+  - `kimi-k2.5` → 返回 `{}`（不发送 temperature）
+  - 其他模型 → 返回 `{"temperature": x}`（若 `LLM_TEMPERATURE` 已配置）
+- `LLM_TEMPERATURE` 类型从 `float = 0.6` 改为 `float | None = None`
+- 全部 9 处调用点跨 5 个文件统一替换为 `**settings.llm_temperature_kwargs(model)`
+
+**涉及文件**：
+- `health_data.py`（3 处）：`_llm_vision_call`、`_generate_doc_summary`、指标解释
+- `health_summary_service.py`（2 处）：`_llm_call`、L3 流式
+- `openai_provider.py`（3 处）：食物识别、聊天非流式、聊天流式
+- `health_reports.py`（1 处）：报告生成流式
+
+### 修改文件
+
+| 文件 | 变更 |
+|---|---|
+| `backend/app/models/health_document.py` | +ai_brief +ai_summary 列 |
+| `backend/app/schemas/health_document.py` | HealthDocumentOut +ai_brief +ai_summary |
+| `backend/app/routers/health_data.py` | _generate_doc_summary + 懒加载 + temperature 替换 |
+| `backend/app/core/config.py` | llm_temperature_kwargs() + LLM_TEMPERATURE 类型改 |
+| `backend/app/providers/openai_provider.py` | temperature 替换 ×3 |
+| `backend/app/services/health_summary_service.py` | temperature 替换 ×2 |
+| `backend/app/routers/health_reports.py` | temperature 替换 ×1 |
+| `Xjie/Models/HealthModels.swift` | HealthDocument +ai_brief +ai_summary |
+| `Xjie/Views/MedicalRecords/MedicalRecordViews.swift` | 列表 brief + 详情 AI 摘要 |
+| `Xjie/Views/ExamReports/ExamReportViews.swift` | 列表 brief + 详情 AI 摘要 |
+| `Xjie/Views/Health/IndicatorTrendView.swift` | Tooltip 位置/颜色/格式修复 |
+| `Xjie/Views/Shared/CSVTableView.swift` | 文字颜色可见性修复 |
+
+---
+
+## 2026-04-02 — v1.3.0 管理后台指标知识库 + Bug 修复
+
+### 管理后台指标知识库 CRUD ✅
+- `admin.py` 新增 4 个端点：GET/POST/PUT/DELETE `/api/admin/indicator-knowledge`
+- `admin.html` Web 管理后台新增"指标知识"Tab 页
+- 支持管理员增删改查指标解释内容
+- Commit: `18a4b2d`
+
+### Kimi K2.5 Temperature 修复（阶段性）✅
+- 统一所有 Kimi K2.5 API 调用的 temperature 参数为 0.6
+- 涉及 `openai_provider.py`、`health_data.py` 等
+- Commit: `d793177`
+
+---
+
 ## 2026-04-01 — v1.2.0 Feature Flag + Skill 技能系统 + 健康摘要 + 指标趋势
 
 ### Feature Flag 功能开关系统 ✅
