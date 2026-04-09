@@ -84,6 +84,14 @@ def create_app() -> FastAPI:
     def admin_page():
         return FileResponse(_STATIC_DIR / "admin.html", media_type="text/html")
 
+    @app.get("/privacy")
+    def privacy_page():
+        return FileResponse(Path(__file__).resolve().parent.parent / "static" / "privacy.html", media_type="text/html")
+
+    @app.get("/")
+    def marketing_page():
+        return FileResponse(Path(__file__).resolve().parent.parent / "static" / "index.html", media_type="text/html")
+
     return app
 
 
