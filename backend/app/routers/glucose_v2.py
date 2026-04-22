@@ -57,7 +57,7 @@ def list_glucose(
         {
             "id": str(r.id),
             "ts": r.ts,
-            "glucose_mgdl": round(r.glucose_mgdl / 18 ,1),
+            "glucose_mmol": round(r.glucose_mmol / 18 ,1),
             "source": r.source,
         }
         for r in rows
