@@ -140,7 +140,7 @@ def list_glucose(
     from_ts: datetime = Query(alias="from"),
     to_ts: datetime = Query(alias="to"),
     limit: int = Query(default=2000, ge=1, le=10000),
-    user_id: int = 8,
+    user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     if to_ts <= from_ts:
