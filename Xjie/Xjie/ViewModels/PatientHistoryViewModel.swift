@@ -302,7 +302,8 @@ final class PatientHistoryViewModel: ObservableObject {
             return
         }
         let fact = profile?.facts.first { $0.fact_key == definition.key }
-        let state = fact?.responseState ?? .value
+        // 画像编辑页允许直接留空；不再让用户额外选择“填写内容/明确没有”等回答状态。
+        let state: HealthProfileResponseState = .value
         let value: String
         if case .string(let raw)? = fact?.value_data["value"] {
             value = raw
@@ -324,11 +325,7 @@ final class PatientHistoryViewModel: ObservableObject {
     func updateEditorValue(_ value: String) {
         guard var editor else { return }
         editor.value = value
-        if editor.definition.category == .longTermHealth,
-           !value.isEmpty,
-           editor.responseState != .value {
-            editor.responseState = .value
-        }
+        editor.responseState = .value
         self.editor = editor
     }
 
@@ -391,8 +388,9 @@ final class PatientHistoryViewModel: ObservableObject {
             return
         }
         let trimmed = editor.value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard editor.responseState != .value || !trimmed.isEmpty else {
-            errorMessage = "请填写内容，或选择“明确没有 / 不适用 / 暂不回答”。"
+        if definition.key == "basic.height",
+           !HealthProfileBasicEditorContract.isValidHeight(trimmed) {
+            errorMessage = HealthProfileBasicEditorContract.heightErrorMessage
             return
         }
         guard let scope = mutationScope() else { return }

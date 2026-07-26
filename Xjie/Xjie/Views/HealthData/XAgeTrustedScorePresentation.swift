@@ -66,6 +66,42 @@ struct XAgeCompositeScores: Equatable {
     }
 }
 
+/// 首页评分摘要的展示状态。评分数值和置信度仍由既有可信评分输入决定，
+/// 本类型只将“无数据 / 缺少某项 / 可展示今日状态”转成稳定的 UI 决策。
+enum XAgeScoreStatusPresentation {
+    static func isFirstUse(scores: XAgeCompositeScores) -> Bool {
+        allMetrics(scores).allSatisfy { !$0.isReady && $0.confidence == 0 }
+    }
+
+    static func missingKinds(scores: XAgeCompositeScores) -> [XAgeDataKind] {
+        [XAgeDataKind.pressure, .recovery, .inflammation]
+            .filter { !scores.score(for: $0).isReady }
+    }
+
+    static func needsData(scores: XAgeCompositeScores) -> Bool {
+        !isFirstUse(scores: scores) && !missingKinds(scores: scores).isEmpty
+    }
+
+    static func confidenceProgress(for metric: XAgeMetricScore) -> CGFloat {
+        CGFloat(min(100, max(0, metric.confidence))) / 100
+    }
+
+    static func missingDataMessage(for kind: XAgeDataKind) -> String {
+        switch kind {
+        case .pressure:
+            return "缺少 HRV、静息心率及睡眠/活动等近期数据。可使用小捷硬件获得更精准的 HRV 反馈，或同步 Apple 健康。"
+        case .recovery:
+            return "缺少 HRV、睡眠、静息心率或生理稳定性等近期数据。可使用小捷硬件，或同步 Apple 健康补齐。"
+        case .inflammation:
+            return "缺少至少两类近期生理或实验室信号。可同步 Apple 健康，或上传血常规、hsCRP 等体检报告。"
+        }
+    }
+
+    private static func allMetrics(_ scores: XAgeCompositeScores) -> [XAgeMetricScore] {
+        [scores.pressure, scores.recovery, scores.inflammation]
+    }
+}
+
 struct XAgeTrustedScorePresentationPolicy {
     static let authority = "server"
     static let isXAgeConsumptionEnabled = false

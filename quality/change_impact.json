@@ -1,74 +1,43 @@
 {
   "schema_version": 1,
-  "change_id": "2026-07-22-xage-modular-architecture-comments",
-  "change_type": "refactor",
-  "current_scope": "只调整 iOS XAGE：首页按功能拆分并补中文注释；按用户最新决定取消 GitHub CLI/强制 PR 交付，允许轻量检查后直接推送 main，并把 TestFlight 候选从已占用的 build 18 提升到 build 19。Android、后端和数据库不修改。",
-  "current_root_cause": "上一轮只把 10305 行 XAgeMainView 拆成七个大角色，后续功能继续集中进入 XAgeDataDashboard，使其增长到 6619 行并同时承担导航、拖拽、同步、算法、目录、录入和报告工作流；文件名上的 data dashboard 已无法表达真实职责。",
-  "current_risk_hypothesis": "物理拆分可能遗漏 PBX Sources membership、破坏 private/fileprivate 可见性、改变快捷功能状态所有权，或让静态可信评分、画像与报告扫描继续读取旧文件；需要编译、结构回归和聚焦交互测试共同验证。",
-  "summary": "把 XAGE 首页从七个粗粒度角色推进为十四个受 manifest 管理的功能模块，同时让中文维护注释不再消耗真实代码行预算。",
-  "root_cause": "仅限制单文件总行数会把多个业务模块固化在同一大文件中，且旧聚合门禁把注释也计为代码，反向抑制必要的维护说明。",
-  "risk_hypothesis": "必须同步更新 Swift 文件、Xcode 工程、manifest、静态扫描入口与负向测试；只移动源码或只放宽行数都会留下未编译文件或新的单体绕过路径。",
+  "change_id": "2026-07-27-xage-score-status-confidence-rings",
+  "change_type": "ui_behavior",
+  "current_scope": "优化 iOS XAGE 数据首页的今日健康数据头部：缩窄标题与评分卡片间距；重绘三个评分圆环为左右对称弧线并增加按 confidence 显示的内圈刻度；按首次使用、单项缺失与评分齐全三种状态切换说明卡。评分计算、服务端可信展示策略、同步行为、后端、Android 和指标详情不修改。",
+  "current_root_cause": "首页头部固定使用同一“今日状态”文案，无法区分无数据、某项待评估和已有评分；圆环仅展示分数进度，且弧形端点视觉不对称，未向用户解释评分支撑数据的完整度。",
+  "current_risk_hypothesis": "状态卡必须只使用已有 isReady/confidence 数据，不得把本地算法或同步完成误称为可信评分；置信度刻度需限制在 0...100，圆环和说明入口的点击与无障碍语义不能退化。",
+  "summary": "为 XAGE 三评分头部增加左右对称圆环、评分支撑数据完整度刻度及首次使用/缺失评分/今日状态三态说明。",
+  "root_cause": "评分状态已有字段但未被首页摘要按状态拆分，圆环也未表达 confidence。",
+  "risk_hypothesis": "首次使用只在三项均无支撑数据时出现；部分缺失应只提示未评分项；三项 ready 时才使用“今日状态”文案。",
   "impacted_domains": [
-    "ios_core",
     "ios_ui_interaction",
-    "ios_chat_client",
     "ios_health_client",
-    "ios_account_client",
-    "ios_project_release",
-    "quality_process_gate",
+    "ios_ui_interaction",
+    "ios_score_presentation",
     "test_suite_integrity"
   ],
   "regression_contracts": [
-    "BRANCH-CANONICAL-001",
-    "PROCESS-GATE-001",
-    "RELEASE-GATE-001",
-    "UX-NAV-001",
-    "UX-KEYBOARD-001",
-    "UX-CHAT-QUIESCENCE-001",
     "UX-ACCESSIBILITY-001",
-    "UX-FORM-001",
-    "DATA-CARD-001",
-    "CHAT-SESSION-001",
-    "AI-EVIDENCE-001",
-    "HEALTH-REGISTRY-001",
-    "HEALTH-ACCOUNT-001",
-    "HEALTH-TRUST-001",
-    "TEST-DETERMINISM-001",
+    "XAGE-TRUSTED-SCORE-001",
     "TEST-SUITE-INTEGRITY-001"
   ],
   "same_class_scan": [
-    "基线确认 origin/main@4659dfa 的 XAgeDataDashboard.swift 为 6619 行，混合首页编排、快捷功能拖拽、服务端同步、评分算法与展示、指标目录、指标管理、手工录入、体重、画像和报告等职责。",
-    "扫描全部 XAge*.swift、Xcode Sources phase、quality/swift_source_manifest.json、可信评分/画像/报告静态扫描入口及现有 XAgeCompositeScores/APIService/UI 测试，确认拆分必须同时修改物理文件、工程成员关系和质量清单。",
-    "扫描快捷功能的数据源、排序持久化、稳定 ID、点击分流及 XAgeMainView 上层路由；把顺序与拖拽状态收拢到 XAgeQuickActionStrip，保留原 ID、辅助功能标识和回调语义。",
-    "扫描跨文件 private/fileprivate 依赖并收窄为模块间必要的 internal 类型：XAgePanelStat、XAgeServerSyncFormat、XAgeScoreRing，以及评分、指标与面板路由类型。",
-    "基线 regression_guard 已有三项可信评分展示策略失败；本次结构工作不修改评分信任语义，验证时单独记录这些历史失败，避免把它们归因于拆分或宣称通过。",
-    "扫描 pre-push、仓库交付规则和聚焦 policy 测试：仅取消 main 的强制 PR 阻断，历史 XAGE 仍保持只读；main 更新继续执行待推送差异空白检查。",
-    "核对六处 CURRENT_PROJECT_VERSION、MARKETING_VERSION 和已上传版本：版本保持 1.0，六处 build 统一为 19；Apple 接受上传后 build 19 已占用，下一候选至少为 20。"
+    "扫描 XAgeDataStickyHeader、XAgeScoreRing、XAgeScoreSummaryCard、XAgeCompositeScores 和 XAgeMetricScore，确认首页只消费已有的 isReady/confidence/nextAction 信息。",
+    "扫描服务端可信评分策略与指标详情路由，确认本次不更改评分生成、服务端版本化门槛或圆环点击入口。"
   ],
   "tests_added_or_updated": [
-    "tools/tests/test_regression_guard.py::RegressionGuardTests.test_xage_dashboard_is_split_by_function_and_comments_do_not_consume_code_budget",
-    "XjieTests/XAgeCompositeScoresTests/testHomeInformationArchitectureUsesFiveActiveShortcutsAndProfileOnlyInMore（同步当前五个已上线入口，并继续覆盖恢复、过滤、追加和双向重排）",
-    "quality/expected_python_tests.json（登记新增结构回归）",
-    "quality/expected_xctests.json（同步 origin/main 已存在但未登记的 iOS 测试清单并恢复稳定排序）",
-    "tools/tests/test_release_policy.py::ReleasePolicyTests.test_hooks_validate_immutable_candidate_snapshots（main 直推允许、XAGE 只读）"
-    ,"tools/tests/test_release_policy.py::ReleasePolicyTests.test_health_profile_canvas_preview_is_debug_only（Release 不得引用 Debug-only 画像预览环境键）"
+    "XjieTests/XAgeCompositeScoresTests.testScoreStatusPresentationSeparatesFirstUseMissingDataAndReadyState（验证首次使用、部分缺失、置信度上限及缺失数据提示契约）"
   ],
   "verification_plan": [
-    "运行新增结构回归，要求十四个 XAGE 模块路径与顺序精确匹配 manifest、首页编排文件不再包含被拆职责，并证明中文注释不消耗逻辑代码预算。",
-    "运行 generic iOS Simulator Debug build，确认新增 Swift 文件进入正确 target、跨文件可见性完整且快捷功能模块可编译。",
-    "运行聚焦 XAgeCompositeScoresTests 与现有轻量 fast/impacted 门禁；将本次无关且基线已存在的可信评分策略失败作为剩余风险如实记录。",
-    "运行 JSON 解析、git diff --check、工程文件与模块行数核验，确认没有修改 XJie_And 或共享后端。",
-    "Release 归档后核验版本、生产 API、arm64、签名、HealthKit entitlement、敏感文件和 marker，再通过 Xcode destination=upload 上传并保存脱敏回执。"
+    "运行评分状态 focused 单元测试与 generic iOS Simulator Debug build，确认状态分支和 SwiftUI 编译。",
+    "手动检查三圆环左右端点、内圈刻度与 0/低/高 confidence 的进度；确认首次使用、单项缺失与三项评分齐全时的说明文案切换。",
+    "运行 JSON 解析、git diff --check 与 fast 门禁；不将其描述为后端、真机或 TestFlight 验证。"
   ],
   "manual_checks": [
-    "在 Simulator 中轻点首页五个已启用快捷功能，确认稳定 ID 路由不变；长按拖动后顺序立即更新并在重启页面后恢复。",
-    "在小屏和大字号下确认快捷功能仍可横向滚动、按钮文字单行缩放、触控目标和 VoiceOver 标签保持原语义。",
-    "打开数据卡片管理、体重详情、健康画像和健康报告，确认 sheet/navigationDestination 与拆分前一致。"
+    "在小屏、大字号和 VoiceOver 下确认三个圆环均分卡片、内圈刻度可读，圆环和信息按钮可点。",
+    "验证无数据时引导使用硬件/Apple 健康/报告；某项 -- 时只提示该项缺失输入；三项评分均有值时显示今日状态。"
   ],
   "unresolved_risks": [
-    "origin/main@4659dfa 的 regression_guard 基线已存在三项可信评分展示策略失败：metric display、XAge root consumption、dashboard consumption；本次不扩大为评分策略修复，因而总 guard 仍会如实失败。",
-    "generic Simulator 编译只能证明工程接线和 Swift 类型检查，不能替代快捷按钮拖拽手感、边缘自动滚动、VoiceOver 或真机 HealthKit 行为验收。",
-    "XAgeMetricManagement.swift 与 XAgeDataPanels.swift 仍分别约 1500 行和 2150 行；已按单一业务族归档并受独立上限约束，后续出现第二种独立工作流时应继续拆分，而不是提高单文件上限。",
-    "TestFlight 1.0(19) 已上传且处于 Apple processing；测试员可见性、真实 HealthKit、第三方输入法、VoiceOver/大字号和真实 AI 内容仍待测试人员确认。"
+    "自动化验证状态与置信度范围契约，不能替代真实设备上的圆环视觉对称性、动画、Dynamic Type 和 VoiceOver 验收。",
+    "当前生产可信评分策略可能持续返回待更新；页面已正确显示首次使用/待补齐引导，但真实评分仍取决于后端版本化快照接入。"
   ]
 }

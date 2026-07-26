@@ -308,6 +308,53 @@ final class XAgeCompositeScoresTests: XCTestCase {
         XCTAssertFalse(XAgeAppleHealthSyncFlow.shouldShowHomeAuthorization(hasSuccessfulSync: true))
     }
 
+    func testPrivacyAndPermissionDisclosureContractsExposeRealCapabilityBoundary() {
+        XCTAssertEqual(XAgeSupportComplianceContract.privacyPolicyVersion, "2026.07")
+        XCTAssertEqual(
+            XAgeSupportComplianceContract.privacyPolicyRequiredTopics,
+            ["适用范围与重要提示", "我们如何收集和使用信息", "敏感个人信息与单独同意", "共享、委托与公开披露", "存储与保护", "你的权利", "未成年人", "联系我们"]
+        )
+        XCTAssertEqual(
+            XAgeSupportComplianceContract.permissionDisclosureIDs,
+            ["health", "notifications", "camera", "photos", "photo-save", "microphone", "speech", "network", "not-used"]
+        )
+    }
+
+    func testScoreStatusPresentationSeparatesFirstUseMissingDataAndReadyState() {
+        func metric(isReady: Bool, confidence: Int) -> XAgeMetricScore {
+            XAgeMetricScore(
+                value: isReady ? 62 : 0,
+                confidence: confidence,
+                isReady: isReady,
+                badgeLabel: isReady ? "稳定" : "待评估",
+                stateLabel: isReady ? "状态稳定" : "待评估",
+                summary: "测试摘要",
+                simpleExplanation: "测试说明",
+                explanation: "测试说明",
+                nextAction: "测试操作",
+                fields: [],
+                drivers: [],
+                isProxy: false
+            )
+        }
+
+        let empty = XAgeCompositeScores.compute(context: XAgeAlgorithmContext())
+        XCTAssertTrue(XAgeScoreStatusPresentation.isFirstUse(scores: empty))
+        XCTAssertEqual(XAgeScoreStatusPresentation.missingKinds(scores: empty), [.pressure, .recovery, .inflammation])
+
+        let partial = XAgeCompositeScores(
+            pressure: metric(isReady: true, confidence: 72),
+            recovery: metric(isReady: false, confidence: 24),
+            inflammation: metric(isReady: false, confidence: 0),
+            xAge: empty.xAge
+        )
+        XCTAssertFalse(XAgeScoreStatusPresentation.isFirstUse(scores: partial))
+        XCTAssertTrue(XAgeScoreStatusPresentation.needsData(scores: partial))
+        XCTAssertEqual(XAgeScoreStatusPresentation.missingKinds(scores: partial), [.recovery, .inflammation])
+        XCTAssertTrue(XAgeScoreStatusPresentation.missingDataMessage(for: .pressure).contains("HRV"))
+        XCTAssertEqual(XAgeScoreStatusPresentation.confidenceProgress(for: metric(isReady: true, confidence: 140)), 1)
+    }
+
     private func sample(metricID: String, name: String, value: Double, unit: String) -> AppleHealthSyncSample {
         AppleHealthSyncSample(
             id: "\(metricID)-test",
