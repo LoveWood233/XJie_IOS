@@ -382,36 +382,7 @@ struct PatientHistoryView: View {
 
                     ForEach(HealthProfileFieldCatalog.definitions(for: form.category)) { definition in
                         let fact = vm.profile?.facts.first { $0.fact_key == definition.key }
-                        Button {
-                            editorFocused = false
-                            vm.beginEditing(definition)
-                        } label: {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(definition.title)
-                                        .font(.system(size: 15, weight: .bold))
-                                        .foregroundStyle(Color(hex: "173F64"))
-                                    Text(fact.map { HealthProfileDisplayFormatter.value($0.value_data) } ?? "待填写")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(Color(hex: "72889C"))
-                                        .lineLimit(2)
-                                }
-                                Spacer()
-                                Image(systemName: "square.and.pencil")
-                                    .foregroundStyle(Color(hex: "2789D8"))
-                            }
-                            .padding(14)
-                            .background(XAgeGlassCardBackground(cornerRadius: 16))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(vm.mutating || vm.hasPendingRetry)
-                        .accessibilityIdentifier("healthProfile.edit.\(definition.key)")
-
-                        if let editor = vm.editor, editor.definition.key == definition.key {
-                            editorCard(editor)
-                                .padding(14)
-                                .background(XAgeGlassCardBackground(cornerRadius: 16))
-                        }
+                        profileFormFieldCard(definition: definition, fact: fact)
                     }
                 }
                 .padding(16)
@@ -445,6 +416,51 @@ struct PatientHistoryView: View {
                 Text(confirmationMessage)
             }
         }
+    }
+
+    private func profileFormFieldCard(
+        definition: HealthProfileFieldDefinition,
+        fact: HealthProfileFact?
+    ) -> some View {
+        let editor = vm.editor?.definition.key == definition.key ? vm.editor : nil
+        return VStack(spacing: 0) {
+            Button {
+                editorFocused = false
+                vm.beginEditing(definition)
+            } label: {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(definition.title)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Color(hex: "173F64"))
+                        Text(fact.map { HealthProfileDisplayFormatter.value($0.value_data) } ?? "待填写")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color(hex: "72889C"))
+                            .lineLimit(editor == nil ? 2 : 1)
+                    }
+                    Spacer()
+                    Image(systemName: editor == nil ? "square.and.pencil" : "chevron.up")
+                        .font(.system(size: editor == nil ? 15 : 13, weight: .semibold))
+                        .foregroundStyle(Color(hex: "2789D8"))
+                }
+                .padding(14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(vm.mutating || vm.hasPendingRetry)
+            .accessibilityIdentifier("healthProfile.edit.\(definition.key)")
+
+            if let editor {
+                Divider()
+                    .overlay(Color(hex: "B8DFF2").opacity(0.7))
+                    .padding(.horizontal, 14)
+                editorCard(editor, includesTopDivider: false)
+                    .padding(14)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(XAgeGlassCardBackground(cornerRadius: 16))
+        .animation(.easeInOut(duration: 0.22), value: editor?.definition.key)
     }
 
     @ViewBuilder
@@ -674,9 +690,14 @@ struct PatientHistoryView: View {
         }
     }
 
-    private func editorCard(_ editor: HealthProfileEditorDraft) -> some View {
+    private func editorCard(
+        _ editor: HealthProfileEditorDraft,
+        includesTopDivider: Bool = true
+    ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Divider()
+            if includesTopDivider {
+                Divider()
+            }
             HStack {
                 Text("编辑：\(editor.definition.title)")
                     .font(.subheadline.bold())
@@ -685,19 +706,9 @@ struct PatientHistoryView: View {
                     .font(.caption2)
                     .foregroundColor(editor.definition.isSafetyCritical ? .appWarning : .appMuted)
             }
-            if editor.definition.showsResponseStatePicker {
-                Picker("回答状态", selection: Binding(
-                    get: { editor.responseState },
-                    set: vm.updateEditorState
-                )) {
-                    ForEach(HealthProfileResponseState.allCases, id: \.self) { state in
-                        Text(state.title).tag(state)
-                    }
-                }
-                .pickerStyle(.menu)
-                .accessibilityIdentifier("healthProfile.editor.state")
-            }
-            if editor.responseState == .value || editor.definition.category == .longTermHealth {
+            if editor.definition.category == .basic {
+                basicEditorInput(editor)
+            } else {
                 ZStack(alignment: .topLeading) {
                     if editor.value.isEmpty {
                         Text(editor.definition.placeholder)
@@ -746,6 +757,57 @@ struct PatientHistoryView: View {
                 .disabled(!editor.isDirty || vm.mutating || vm.hasPendingRetry)
                 .accessibilityIdentifier("healthProfile.editor.save")
             }
+        }
+    }
+
+    @ViewBuilder
+    private func basicEditorInput(_ editor: HealthProfileEditorDraft) -> some View {
+        let value = Binding(
+            get: { editor.value },
+            set: vm.updateEditorValue
+        )
+        switch editor.definition.key {
+        case "basic.birth_date":
+            XAgeProfileBirthDatePicker(value: value)
+        case "basic.sex":
+            XAgeProfileOptionPicker(
+                title: "性别",
+                placeholder: editor.definition.placeholder,
+                options: HealthProfileBasicEditorContract.sexOptions,
+                value: value
+            )
+        case "basic.height":
+            XAgeProfileHeightKeypad(value: value)
+        case "basic.blood_type":
+            XAgeProfileOptionPicker(
+                title: "血型",
+                placeholder: editor.definition.placeholder,
+                options: HealthProfileBasicEditorContract.bloodTypeOptions,
+                value: value
+            )
+        case "basic.region":
+            XAgeProfileProvinceCityPicker(value: value)
+                .id(editor.definition.key)
+        default:
+            ZStack(alignment: .topLeading) {
+                if editor.value.isEmpty {
+                    Text(editor.definition.placeholder)
+                        .font(.body)
+                        .foregroundColor(.appMuted)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 16)
+                        .allowsHitTesting(false)
+                }
+                TextEditor(text: value)
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .focused($editorFocused)
+                    .accessibilityLabel(editor.definition.placeholder)
+                    .accessibilityIdentifier("healthProfile.editor.value")
+            }
+            .frame(minHeight: 112, maxHeight: 190)
+            .background(Color.appBackground)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.appStroke))
         }
     }
 
@@ -1446,6 +1508,190 @@ struct PatientHistoryView: View {
         case .complete: return "确认完成"
         case .archive: return "归档删除"
         }
+    }
+}
+
+private struct XAgeProfileBirthDatePicker: View {
+    @Binding var value: String
+
+    private var selection: Binding<Date> {
+        Binding(
+            get: { HealthProfileBasicEditorContract.birthDate(from: value) ?? Calendar.current.date(byAdding: .year, value: -30, to: Date()) ?? Date() },
+            set: { value = HealthProfileBasicEditorContract.birthDateString($0) }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(value.isEmpty ? "请选择出生日期" : value)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(value.isEmpty ? Color(hex: "72889C") : Color(hex: "173F64"))
+                Spacer()
+                if !value.isEmpty {
+                    Button("清除") { value = "" }
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Color(hex: "2789D8"))
+                }
+            }
+            DatePicker(
+                "出生日期",
+                selection: selection,
+                in: ...Date(),
+                displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .accessibilityIdentifier("healthProfile.basic.birthDate")
+        }
+        .padding(12)
+        .background(Color.appBackground)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.appStroke))
+    }
+}
+
+private struct XAgeProfileOptionPicker: View {
+    let title: String
+    let placeholder: String
+    let options: [String]
+    @Binding var value: String
+
+    var body: some View {
+        Picker(title, selection: $value) {
+            Text(placeholder).tag("")
+            ForEach(options, id: \.self) { option in
+                Text(option).tag(option)
+            }
+        }
+        .pickerStyle(.menu)
+        .tint(Color(hex: "2789D8"))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 48)
+        .background(XAgeRoundedFieldBackground(cornerRadius: 12))
+        .accessibilityIdentifier("healthProfile.basic.\(title)")
+    }
+}
+
+private struct XAgeProfileHeightKeypad: View {
+    @Binding var value: String
+
+    private var digits: String { HealthProfileBasicEditorContract.heightDigits(from: value) }
+    private var isValid: Bool { HealthProfileBasicEditorContract.isValidHeight(value) }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                Text(digits.isEmpty ? "---" : digits)
+                    .font(.system(size: 42, weight: .medium, design: .rounded))
+                    .foregroundStyle(digits.isEmpty ? Color(hex: "AAB5C1") : Color(hex: "15B88A"))
+                    .monospacedDigit()
+                Text("cm")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color(hex: "15B88A"))
+            }
+            Rectangle().fill(Color(hex: "15B88A")).frame(width: 150, height: 2)
+            Text(isValid ? "请输入 60–210 cm 之间的整数" : HealthProfileBasicEditorContract.heightErrorMessage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isValid ? Color(hex: "72889C") : Color(hex: "E44C4C"))
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                ForEach(1...9, id: \.self) { digit in
+                    keyButton(String(digit)) { append(digit) }
+                }
+                keyButton("清除") { value = "" }
+                keyButton("0") { append(0) }
+                keyButton("退格", icon: "delete.left") {
+                    value = HealthProfileBasicEditorContract.heightValue(from: String(digits.dropLast()))
+                }
+            }
+            .accessibilityIdentifier("healthProfile.basic.height.keypad")
+        }
+        .padding(12)
+        .background(Color(hex: "F3F6FA"))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func keyButton(_ title: String, icon: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            if let icon {
+                Image(systemName: icon)
+            } else {
+                Text(title)
+            }
+        }
+        .font(.system(size: title == "清除" || title == "退格" ? 15 : 22, weight: .medium))
+        .foregroundStyle(Color(hex: "24364B"))
+        .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
+        .background(.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .buttonStyle(.plain)
+    }
+
+    private func append(_ digit: Int) {
+        guard digits.count < 3 else { return }
+        value = HealthProfileBasicEditorContract.heightValue(from: digits + String(digit))
+    }
+}
+
+private struct XAgeProfileProvinceCityPicker: View {
+    @Binding var value: String
+    @State private var province: String
+    @State private var city: String
+
+    init(value: Binding<String>) {
+        _value = value
+        let selected = HealthProfileBasicEditorContract.region(from: value.wrappedValue)
+        let initialProvince = selected?.province ?? HealthProfileBasicEditorContract.provinces[0].name
+        _province = State(initialValue: initialProvince)
+        _city = State(initialValue: selected?.city ?? HealthProfileBasicEditorContract.provinces[0].cities[0])
+    }
+
+    private var cities: [String] {
+        HealthProfileBasicEditorContract.provinces.first(where: { $0.name == province })?.cities ?? []
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(value.isEmpty ? "请选择省份和所在市" : value)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(value.isEmpty ? Color(hex: "72889C") : Color(hex: "173F64"))
+            HStack(spacing: 10) {
+                Picker("省份", selection: $province) {
+                    ForEach(HealthProfileBasicEditorContract.provinces) { item in
+                        Text(item.name).tag(item.name)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .frame(minHeight: 44)
+                .background(XAgeRoundedFieldBackground(cornerRadius: 10))
+                Picker("所在市", selection: $city) {
+                    ForEach(cities, id: \.self) { item in
+                        Text(item).tag(item)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .frame(minHeight: 44)
+                .background(XAgeRoundedFieldBackground(cornerRadius: 10))
+            }
+            .tint(Color(hex: "2789D8"))
+            .onChange(of: province) { _, selectedProvince in
+                city = HealthProfileBasicEditorContract.provinces.first(where: { $0.name == selectedProvince })?.cities.first ?? ""
+                updateValue()
+            }
+            .onChange(of: city) { _, _ in updateValue() }
+        }
+        .padding(12)
+        .background(XAgeRoundedFieldBackground(cornerRadius: 14))
+        .accessibilityIdentifier("healthProfile.basic.region")
+    }
+
+    private func updateValue() {
+        guard !province.isEmpty, !city.isEmpty else { return }
+        value = "\(province) \(city)"
     }
 }
 

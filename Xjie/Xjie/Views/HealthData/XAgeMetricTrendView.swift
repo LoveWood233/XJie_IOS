@@ -77,6 +77,23 @@ enum XAgeMetricTrendContract {
         return (minimum - 5)...(maximum + 5)
     }
 
+    static func weightYAxisValues(values: [Double]) -> [Double] {
+        let domain = weightYDomain(values: values)
+        let step = (domain.upperBound - domain.lowerBound) / 3
+        return (0...3).map { (domain.lowerBound + Double($0) * step).rounded() }
+    }
+
+    static func weightYAxisLabel(_ value: Double) -> String {
+        if abs(value.rounded() - value) < 0.05 {
+            return String(format: "%.0f", value)
+        }
+        return String(format: "%.1f", value)
+    }
+
+    static func weightTooltip(date: Date, value: Double) -> String {
+        "\(weightTooltipDateFormatter.string(from: date))   \(weightYAxisLabel(value))kg"
+    }
+
     static func weightChartWidth(
         windowStart: Date,
         windowEnd: Date,
@@ -138,6 +155,24 @@ enum XAgeMetricTrendContract {
         formatter.dateFormat = "yyyy年M月d日"
         return formatter
     }()
+
+    private static let weightTooltipDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+}
+
+enum XAgeWeightTrendGuidanceContract {
+    static let title = "怎么看体重变化"
+    static let observationTitle = "看趋势，不只看今天"
+    static let observationBody = "体重会受水分、饮食盐分、进食时间和排便等因素影响。一次上涨或下降，未必代表脂肪发生了相同幅度的变化。"
+    static let recordingTitle = "记录条件尽量一致"
+    static let recordingBody = "建议在早晨起床、如厕后、进食前记录，连续观察一到两周的变化会更有参考价值。"
+    static let encouragement = "今天的数字只是一个记录点，不是对你的评价。稳稳地记录下去，你会更了解自己的身体。"
 }
 
 enum XAgeWeightPickerContract {
@@ -574,6 +609,7 @@ struct XAgeWeightRecordDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var selectedID: String?
+    @State private var showsTrendGuidance = false
     private let now = Date()
 
     private var samples: [XAgeMetricTrendSample] {
@@ -622,6 +658,11 @@ struct XAgeWeightRecordDetailView: View {
             .scrollIndicators(.hidden)
         }
         .accessibilityIdentifier("xage.weight.detail")
+        .sheet(isPresented: $showsTrendGuidance) {
+            XAgeWeightTrendGuidanceSheet()
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var header: some View {
@@ -716,9 +757,22 @@ struct XAgeWeightRecordDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("体重变化")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(Color(hex: "173F64"))
+                    HStack(spacing: 2) {
+                        Text("体重变化")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(Color(hex: "173F64"))
+                        Button { showsTrendGuidance = true } label: {
+                            Image(systemName: "info.circle.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(metric.accent)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("体重变化说明")
+                        .accessibilityHint("了解如何看待体重的日常波动")
+                        .accessibilityIdentifier("xage.weight.trend.guidance")
+                    }
                     Text("近三个月 · 左右滑动查看")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color(hex: "6C8194"))
@@ -742,11 +796,17 @@ struct XAgeWeightRecordDetailView: View {
                 .frame(maxWidth: .infinity, minHeight: 190)
             } else {
                 GeometryReader { geometry in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        weightChart
-                            .frame(width: chartWidth(viewportWidth: geometry.size.width), height: 224)
+                    ZStack(alignment: .topLeading) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            weightChart
+                                .frame(width: chartWidth(viewportWidth: geometry.size.width), height: 224)
+                        }
+                        .defaultScrollAnchor(.trailing)
+
+                        weightYAxisLabels
+                            .frame(width: 24, height: 224, alignment: .topTrailing)
+                            .allowsHitTesting(false)
                     }
-                    .defaultScrollAnchor(.trailing)
                 }
                 .frame(height: 224)
             }
@@ -780,12 +840,11 @@ struct XAgeWeightRecordDetailView: View {
                     .foregroundStyle(metric.accent.opacity(0.45))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
                     .annotation(position: .top, spacing: 8) {
-                        VStack(spacing: 2) {
-                            Text(selectedSample.dateLabel)
-                                .font(.system(size: 11, weight: .semibold))
-                            Text("\(Self.number(selectedSample.value, digits: 1)) kg")
-                                .font(.system(size: 18, weight: .bold))
-                        }
+                        Text(XAgeMetricTrendContract.weightTooltip(
+                            date: selectedSample.date,
+                            value: selectedSample.value
+                        ))
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
                         .foregroundStyle(Color(hex: "173F64"))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -807,14 +866,11 @@ struct XAgeWeightRecordDetailView: View {
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading) { value in
+            AxisMarks(
+                position: .leading,
+                values: XAgeMetricTrendContract.weightYAxisValues(values: samples.map(\.value))
+            ) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.35))
-                AxisValueLabel {
-                    if let number = value.as(Double.self) {
-                        Text(Self.number(number, digits: 0))
-                            .font(.system(size: 9))
-                    }
-                }
             }
         }
         .chartOverlay { proxy in
@@ -836,6 +892,25 @@ struct XAgeWeightRecordDetailView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(weightChartAccessibilityLabel)
         .accessibilityHint("左右滑动查看日期；长按图表选择某次体重记录")
+    }
+
+    private var weightYAxisLabels: some View {
+        let values = XAgeMetricTrendContract.weightYAxisValues(values: samples.map(\.value))
+        return VStack(alignment: .trailing, spacing: 0) {
+            ForEach(Array(values.reversed().enumerated()), id: \.offset) { index, value in
+                Text(XAgeMetricTrendContract.weightYAxisLabel(value))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Color(hex: "6C8194"))
+                    .monospacedDigit()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+
+                if index < values.count - 1 {
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(.bottom, 22)
+        .accessibilityHidden(true)
     }
 
     private var recordButton: some View {
@@ -1198,6 +1273,65 @@ struct XAgeMetricTrendView: View {
     }
 }
 
+private struct XAgeWeightTrendGuidanceSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                Text(XAgeWeightTrendGuidanceContract.title)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(Color(hex: "173F64"))
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color(hex: "6C8194"))
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("关闭体重变化说明")
+            }
+
+            XAgeWeightTrendGuidanceSection(
+                title: XAgeWeightTrendGuidanceContract.observationTitle,
+                message: XAgeWeightTrendGuidanceContract.observationBody
+            )
+            XAgeWeightTrendGuidanceSection(
+                title: XAgeWeightTrendGuidanceContract.recordingTitle,
+                message: XAgeWeightTrendGuidanceContract.recordingBody
+            )
+
+            Text(XAgeWeightTrendGuidanceContract.encouragement)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color(hex: "167D90"))
+                .lineSpacing(4)
+                .padding(16)
+                .background(Color(hex: "20CDB1").opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            Spacer(minLength: 0)
+        }
+        .padding(24)
+    }
+}
+
+private struct XAgeWeightTrendGuidanceSection: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(Color(hex: "173F64"))
+            Text(message)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Color(hex: "5D7890"))
+                .lineSpacing(4)
+        }
+    }
+}
+
 private extension String {
     var nonEmpty: String? { isEmpty ? nil : self }
 }
@@ -1207,3 +1341,82 @@ private extension Comparable {
         min(max(self, range.lowerBound), range.upperBound)
     }
 }
+
+#if DEBUG
+private enum XAgeWeightTrendPreviewFixture {
+    private static let calendar = Calendar(identifier: .gregorian)
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    static let metric = XAgeMetric(
+        id: "weight",
+        title: "体重",
+        value: "78.0",
+        unit: "kg",
+        time: "刚刚记录",
+        subtitle: "手动记录",
+        accent: Color(hex: "20CDB1"),
+        measuredAt: day(-3)
+    )
+
+    static let trend = IndicatorTrend(
+        name: "体重",
+        unit: "kg",
+        ref_low: nil,
+        ref_high: nil,
+        points: [
+            point(-75, 76.2),
+            point(-46, 77.4),
+            point(-19, 76.8),
+            point(-3, 78.0)
+        ]
+    )
+
+    private static func point(_ offset: Int, _ value: Double) -> TrendPoint {
+        TrendPoint(
+            date: day(offset),
+            value: value,
+            abnormal: false,
+            source: "preview",
+            measured_at: nil,
+            source_metric: nil,
+            source_id: "weight-\(offset)",
+            value_kind: nil,
+            display_value: nil,
+            source_local_date: nil,
+            timezone_offset_minutes: nil
+        )
+    }
+
+    private static func day(_ offset: Int) -> String {
+        formatter.string(from: calendar.date(byAdding: .day, value: offset, to: Date()) ?? Date())
+    }
+}
+
+#Preview("体重记录 · 纵轴刻度") {
+    XAgeWeightTrendPreviewHost()
+}
+
+private struct XAgeWeightTrendPreviewHost: View {
+    var body: some View {
+        XAgeWeightRecordFlowView(
+            metric: XAgeWeightTrendPreviewFixture.metric,
+            trend: XAgeWeightTrendPreviewFixture.trend,
+            heightCentimeters: 172,
+            refresh: {
+                XAgeWeightRecordSnapshot(
+                    metric: XAgeWeightTrendPreviewFixture.metric,
+                    trend: XAgeWeightTrendPreviewFixture.trend,
+                    heightCentimeters: 172
+                )
+            }
+        )
+    }
+}
+#endif

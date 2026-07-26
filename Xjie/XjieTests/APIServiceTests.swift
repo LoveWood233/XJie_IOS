@@ -885,6 +885,19 @@ final class APIServiceTests: XCTestCase {
         XCTAssertEqual(recent.map(\.value), [62, 70], "三个月窗口必须相对当前日期，而不是最后一条记录")
         XCTAssertEqual(XAgeMetricTrendContract.weightYDomain(values: []), 45...75)
         XCTAssertEqual(XAgeMetricTrendContract.weightYDomain(values: recent.map(\.value)), 57...75)
+        XCTAssertEqual(XAgeMetricTrendContract.weightYAxisValues(values: recent.map(\.value)), [57, 63, 69, 75])
+        XCTAssertEqual(
+            XAgeMetricTrendContract.weightYAxisValues(values: [62.1, 70.2]),
+            [57, 63, 69, 75],
+            "纵轴刻度应只显示整数，即使体重数据带有小数"
+        )
+        XCTAssertEqual(XAgeMetricTrendContract.weightYAxisLabel(63), "63")
+        XCTAssertEqual(XAgeMetricTrendContract.weightYAxisLabel(63.5), "63.5")
+        XCTAssertEqual(
+            XAgeMetricTrendContract.weightTooltip(date: try XCTUnwrap(recent.last).date, value: 78),
+            "2026-07-20   78kg",
+            "长按体重点的气泡只应展示 ISO 日期与体重"
+        )
         XCTAssertGreaterThan(
             XAgeMetricTrendContract.weightChartWidth(
                 windowStart: try XCTUnwrap(Calendar(identifier: .gregorian).date(byAdding: .month, value: -3, to: now)),
@@ -927,6 +940,21 @@ final class APIServiceTests: XCTestCase {
         XCTAssertNil(XAgeHeightEntryContract.validatedHeight(from: "49"))
         XCTAssertNil(XAgeHeightEntryContract.validatedHeight(from: "211"))
         XCTAssertEqual(XAgeHeightEntryContract.errorMessage, "数据范围异常，请填写正确数字。")
+    }
+
+    func testWeightTrendGuidanceExplainsDailyFluctuationWithoutEquatingItToFatChange() {
+        XCTAssertEqual(XAgeWeightTrendGuidanceContract.title, "怎么看体重变化")
+        XCTAssertTrue(XAgeWeightTrendGuidanceContract.observationBody.contains("水分"))
+        XCTAssertTrue(XAgeWeightTrendGuidanceContract.observationBody.contains("未必代表脂肪"))
+        XCTAssertTrue(XAgeWeightTrendGuidanceContract.recordingBody.contains("早晨起床"))
+        XCTAssertTrue(XAgeWeightTrendGuidanceContract.encouragement.contains("记录点"))
+    }
+
+    func testWeightYAxisRoundsDecimalValuesToIntegers() {
+        let values = XAgeMetricTrendContract.weightYAxisValues(values: [62.1, 70.2])
+
+        XCTAssertEqual(values, [57, 63, 69, 75])
+        XCTAssertTrue(values.allSatisfy { $0 == $0.rounded() }, "纵轴刻度只应保留到个位数")
     }
 
     func testPatientHistoryLegacyKeysMigrateWithoutSilentDataLoss() throws {
@@ -1719,9 +1747,25 @@ final class APIServiceTests: XCTestCase {
             "长期健康标签允许留空，不应显示回答状态菜单"
         )
         XCTAssertTrue(
-            HealthProfileFieldCatalog.definition(for: "safety.medication_allergy")?.showsResponseStatePicker == true,
-            "安全信息必须继续允许用户明确选择没有、不适用或暂不回答"
+            HealthProfileFieldCatalog.editable.allSatisfy { !$0.showsResponseStatePicker },
+            "画像编辑页不应再显示“填写内容”等回答状态选择控件"
         )
+        let basicDefinitions = HealthProfileFieldCatalog.definitions(for: .basic)
+        XCTAssertNil(HealthProfileFieldCatalog.definition(for: "basic.weight"))
+        XCTAssertEqual(
+            basicDefinitions.map(\.key),
+            ["basic.birth_date", "basic.sex", "basic.height", "basic.blood_type", "basic.region", "basic.lifestyle"]
+        )
+        XCTAssertEqual(
+            basicDefinitions.first(where: { $0.key == "basic.lifestyle" })?.placeholder,
+            "例如：久坐、吸烟等生活习惯"
+        )
+        XCTAssertEqual(HealthProfileBasicEditorContract.sexOptions, ["男", "女"])
+        XCTAssertEqual(HealthProfileBasicEditorContract.bloodTypeOptions, ["A", "B", "AB", "O", "未知"])
+        XCTAssertEqual(HealthProfileBasicEditorContract.birthDateString(try XCTUnwrap(HealthProfileBasicEditorContract.birthDate(from: "1985-06-18"))), "1985-06-18")
+        XCTAssertTrue(HealthProfileBasicEditorContract.isValidHeight("170 cm"))
+        XCTAssertFalse(HealthProfileBasicEditorContract.isValidHeight("211 cm"))
+        XCTAssertEqual(HealthProfileBasicEditorContract.region(from: "浙江省 杭州市")?.city, "杭州市")
         let serverAction = HealthProfilePrimaryAction(
             kind: "review_updates",
             item_count: 7,

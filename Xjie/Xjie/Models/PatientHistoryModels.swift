@@ -696,18 +696,90 @@ struct HealthProfileFieldDefinition: Identifiable, Equatable, Sendable {
 
     var id: String { key }
     var isSafetyCritical: Bool { category == .safety }
-    var showsResponseStatePicker: Bool { category != .longTermHealth }
+    /// 编辑页允许直接留空；不再要求用户为每个字段额外选择“填写内容”。
+    var showsResponseStatePicker: Bool { false }
+}
+
+struct HealthProfileProvince: Identifiable, Equatable, Sendable {
+    let name: String
+    let cities: [String]
+
+    var id: String { name }
+}
+
+enum HealthProfileBasicEditorContract {
+    static let sexOptions = ["男", "女"]
+    static let bloodTypeOptions = ["A", "B", "AB", "O", "未知"]
+    static let heightRange = 60...210
+    static let heightErrorMessage = "数据范围异常，请填写正确数字。"
+    static let provinces: [HealthProfileProvince] = [
+        .init(name: "北京市", cities: ["北京市"]), .init(name: "天津市", cities: ["天津市"]), .init(name: "上海市", cities: ["上海市"]), .init(name: "重庆市", cities: ["重庆市"]),
+        .init(name: "河北省", cities: ["石家庄市", "唐山市", "保定市", "廊坊市", "邯郸市"]), .init(name: "山西省", cities: ["太原市", "大同市", "长治市", "晋中市", "运城市"]),
+        .init(name: "内蒙古自治区", cities: ["呼和浩特市", "包头市", "赤峰市", "鄂尔多斯市"]), .init(name: "辽宁省", cities: ["沈阳市", "大连市", "鞍山市", "锦州市"]),
+        .init(name: "吉林省", cities: ["长春市", "吉林市", "延边朝鲜族自治州"]), .init(name: "黑龙江省", cities: ["哈尔滨市", "齐齐哈尔市", "大庆市", "牡丹江市"]),
+        .init(name: "江苏省", cities: ["南京市", "苏州市", "无锡市", "常州市", "徐州市", "南通市"]), .init(name: "浙江省", cities: ["杭州市", "宁波市", "温州市", "嘉兴市", "绍兴市", "金华市"]),
+        .init(name: "安徽省", cities: ["合肥市", "芜湖市", "蚌埠市", "阜阳市", "安庆市"]), .init(name: "福建省", cities: ["福州市", "厦门市", "泉州市", "漳州市", "莆田市"]),
+        .init(name: "江西省", cities: ["南昌市", "赣州市", "九江市", "上饶市", "宜春市"]), .init(name: "山东省", cities: ["济南市", "青岛市", "烟台市", "潍坊市", "临沂市"]),
+        .init(name: "河南省", cities: ["郑州市", "洛阳市", "开封市", "新乡市", "南阳市"]), .init(name: "湖北省", cities: ["武汉市", "宜昌市", "襄阳市", "荆州市", "黄冈市"]),
+        .init(name: "湖南省", cities: ["长沙市", "株洲市", "湘潭市", "衡阳市", "岳阳市"]), .init(name: "广东省", cities: ["广州市", "深圳市", "珠海市", "佛山市", "东莞市", "汕头市"]),
+        .init(name: "广西壮族自治区", cities: ["南宁市", "桂林市", "柳州市", "北海市"]), .init(name: "海南省", cities: ["海口市", "三亚市", "儋州市"]),
+        .init(name: "四川省", cities: ["成都市", "绵阳市", "德阳市", "宜宾市", "乐山市"]), .init(name: "贵州省", cities: ["贵阳市", "遵义市", "毕节市", "六盘水市"]),
+        .init(name: "云南省", cities: ["昆明市", "曲靖市", "大理白族自治州", "丽江市"]), .init(name: "西藏自治区", cities: ["拉萨市", "日喀则市", "林芝市"]),
+        .init(name: "陕西省", cities: ["西安市", "咸阳市", "宝鸡市", "榆林市"]), .init(name: "甘肃省", cities: ["兰州市", "天水市", "酒泉市", "张掖市"]),
+        .init(name: "青海省", cities: ["西宁市", "海东市"]), .init(name: "宁夏回族自治区", cities: ["银川市", "吴忠市", "中卫市"]),
+        .init(name: "新疆维吾尔自治区", cities: ["乌鲁木齐市", "喀什地区", "伊犁哈萨克自治州", "克拉玛依市"]), .init(name: "香港特别行政区", cities: ["香港特别行政区"]),
+        .init(name: "澳门特别行政区", cities: ["澳门特别行政区"]), .init(name: "台湾省", cities: ["台北市", "高雄市", "台中市"])
+    ]
+
+    static func birthDate(from value: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+        return formatter.date(from: value)
+    }
+
+    static func birthDateString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    static func heightDigits(from value: String) -> String {
+        String(value.filter(\.isNumber).prefix(3))
+    }
+
+    static func heightValue(from digits: String) -> String {
+        digits.isEmpty ? "" : "\(digits) cm"
+    }
+
+    static func isValidHeight(_ value: String) -> Bool {
+        guard !value.isEmpty else { return true }
+        guard let height = Int(heightDigits(from: value)) else { return false }
+        return heightRange.contains(height)
+    }
+
+    static func region(from value: String) -> (province: String, city: String)? {
+        provinces.lazy.compactMap { province in
+            province.cities.first(where: { value == "\(province.name) \($0)" || value == "\(province.name)\($0)" })
+                .map { (province.name, $0) }
+        }.first
+    }
 }
 
 enum HealthProfileFieldCatalog {
     static let editable: [HealthProfileFieldDefinition] = [
-        .init(key: "basic.birth_date", category: .basic, title: "出生日期", placeholder: "例如 1985-06-18"),
-        .init(key: "basic.sex", category: .basic, title: "性别", placeholder: "按你的意愿填写"),
-        .init(key: "basic.height", category: .basic, title: "身高", placeholder: "例如 170 cm"),
-        .init(key: "basic.weight", category: .basic, title: "体重", placeholder: "例如 65 kg"),
-        .init(key: "basic.blood_type", category: .basic, title: "血型", placeholder: "例如 A 型"),
-        .init(key: "basic.region", category: .basic, title: "所在地区", placeholder: "例如 上海"),
-        .init(key: "basic.lifestyle", category: .basic, title: "生活方式", placeholder: "例如 久坐、夜班"),
+        .init(key: "basic.birth_date", category: .basic, title: "出生日期", placeholder: "请选择出生年月日"),
+        .init(key: "basic.sex", category: .basic, title: "性别", placeholder: "请选择性别"),
+        .init(key: "basic.height", category: .basic, title: "身高", placeholder: "请使用数字键填写身高"),
+        .init(key: "basic.blood_type", category: .basic, title: "血型", placeholder: "请选择血型"),
+        .init(key: "basic.region", category: .basic, title: "所在地区", placeholder: "请选择省份和所在市"),
+        .init(key: "basic.lifestyle", category: .basic, title: "生活习惯", placeholder: "例如：久坐、吸烟等生活习惯"),
         .init(key: "long_term_health.diagnoses", category: .longTermHealth, title: "已确认慢病", placeholder: "填写医生已经明确诊断、需要长期管理的疾病，例如：高血压、2 型糖尿病"),
         .init(key: "long_term_health.family_history", category: .longTermHealth, title: "家族病史", placeholder: "填写血亲家庭成员曾患的疾病，例如：父亲高血压、母亲高血脂"),
         .init(key: "long_term_health.recent_findings", category: .longTermHealth, title: "长期异常指标", placeholder: "填写多次检查异常或需要长期复查的指标，例如：低密度脂蛋白偏高、尿酸持续升高"),

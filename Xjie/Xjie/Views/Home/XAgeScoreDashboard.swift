@@ -82,7 +82,7 @@ struct XAgeDataStickyHeader: View {
     let onSelectInfo: (XAgeDataKind) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12 - 4 * collapseProgress) {
+        VStack(alignment: .leading, spacing: 7 - 2 * collapseProgress) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("今日健康数据")
                     .font(.system(size: 27 - 4 * collapseProgress, weight: .bold))
@@ -96,7 +96,7 @@ struct XAgeDataStickyHeader: View {
 //                    .frame(height: 18 * (1 - collapseProgress), alignment: .top)
 //                    .clipped()
             }
-            .frame(height: 52 - 18 * collapseProgress, alignment: .topLeading)
+            .frame(height: 39 - 8 * collapseProgress, alignment: .topLeading)
 
             XAgeScoreRingPanel(
                 collapseProgress: collapseProgress,
@@ -199,29 +199,37 @@ struct XAgeScoreRing: View {
 
     private var ringGraphic: some View {
         let lineWidth = max(7, ringSize * 0.1)
+        let scoreProgress = metric.isReady ? CGFloat(metric.value) / 100 : 0
+        let confidenceProgress = XAgeScoreStatusPresentation.confidenceProgress(for: metric)
         return ZStack {
             Circle()
-                .trim(from: 0.04, to: 0.9)
+                .trim(from: 0.12, to: 0.88)
                 .stroke(Color.white.opacity(0.52), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(112))
+                .rotationEffect(.degrees(-90))
             Circle()
-                .trim(from: 0.04, to: 0.04 + 0.86 * CGFloat(metric.isReady ? metric.value : 0) / 100)
+                .trim(from: 0.12, to: 0.12 + 0.76 * scoreProgress)
                 .stroke(
                     AngularGradient(
                         colors: [kind.tint.opacity(0.35), kind.tint, Color.appAccent, kind.tint],
                         center: .center
-                    ),
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                ),
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
-                .rotationEffect(.degrees(112))
+                .rotationEffect(.degrees(-90))
                 .opacity(metric.isReady ? 1 : 0.28)
                 .shadow(color: kind.tint.opacity(metric.isReady ? 0.22 : 0.08), radius: 8, x: 0, y: 3)
+            XAgeScoreConfidenceTicks(
+                tint: kind.tint,
+                progress: confidenceProgress,
+                size: ringSize
+            )
             Text(metric.displayValue)
                 .font(.system(size: metric.isReady ? (ringSize >= 80 ? 25 : 22) : 20, weight: .bold))
                 .foregroundStyle(Color(hex: "17324E"))
         }
         .frame(width: ringSize, height: ringSize)
         .contentShape(Circle())
+        .accessibilityValue("评分支撑数据完整度 (metric.confidence)%")
     }
 }
 
@@ -233,7 +241,7 @@ private struct XAgeScoreRingPanel: View {
 
     var body: some View {
         let ringSize = 86 - 14 * collapseProgress
-        HStack(spacing: 8) {
+        HStack(spacing: 0) {
             XAgeScoreRing(
                 kind: .pressure,
                 metric: scores.pressure,
@@ -257,8 +265,33 @@ private struct XAgeScoreRingPanel: View {
             )
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 122)
+        .frame(height: 118)
         .background(XAgeGlassCardBackground(cornerRadius: 28))
+    }
+}
+
+private struct XAgeScoreConfidenceTicks: View {
+    let tint: Color
+    let progress: CGFloat
+    let size: CGFloat
+
+    private let tickCount = 24
+
+    var body: some View {
+        let activeTicks = Int((CGFloat(tickCount) * progress).rounded(.toNearestOrAwayFromZero))
+        let radius = size * 0.285
+        ZStack {
+            ForEach(0..<tickCount, id: \.self) { index in
+                Capsule()
+                    .fill(index < activeTicks ? tint.opacity(0.92) : Color(hex: "9BA9B7").opacity(0.36))
+                    .frame(width: max(1.5, size * 0.022), height: max(4, size * 0.065))
+                    .offset(y: -radius)
+                    .rotationEffect(.degrees(Double(index) * 360 / Double(tickCount)))
+            }
+        }
+        .frame(width: size, height: size)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -274,43 +307,88 @@ private struct XAgeScoreSummaryCard: View {
         ]
     }
 
+    private var missingKinds: [XAgeDataKind] {
+        XAgeScoreStatusPresentation.missingKinds(scores: scores)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8 - 2 * compactProgress) {
-            HStack(spacing: 8) {
-                Text("今日状态")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color(hex: "173F64"))
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                HStack(spacing: 5) {
-                    ForEach(badges, id: \.id) { item in
-                        HStack(spacing: 3) {
-                            Circle()
-                                .fill(item.color)
-                                .frame(width: 6, height: 6)
-                            Text(item.title)
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(item.color)
-                                .lineLimit(1)
+            if XAgeScoreStatusPresentation.isFirstUse(scores: scores) {
+                XAgeScoreDataPrompt(
+                    title: "开始获取评分数据",
+                    icon: "waveform.path.ecg",
+                    message: "使用小捷硬件、同步 Apple 健康或上传体检报告单后，可逐步获得压力、恢复和炎症评分。"
+                )
+            } else if XAgeScoreStatusPresentation.needsData(scores: scores) {
+                XAgeScoreDataPrompt(
+                    title: "补齐评分数据",
+                    icon: "chart.line.uptrend.xyaxis",
+                    message: missingKinds.map { "\($0.rawValue)未评分：\(XAgeScoreStatusPresentation.missingDataMessage(for: $0))" }.joined(separator: "\n")
+                )
+            } else {
+                HStack(spacing: 8) {
+                    Text("今日状态")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Color(hex: "173F64"))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    HStack(spacing: 5) {
+                        ForEach(badges, id: \.id) { item in
+                            HStack(spacing: 3) {
+                                Circle()
+                                    .fill(item.color)
+                                    .frame(width: 6, height: 6)
+                                Text(item.title)
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(item.color)
+                                    .lineLimit(1)
+                            }
+                            .frame(width: 60, height: 22)
+                            .background(
+                                Capsule()
+                                    .fill(.white.opacity(0.48))
+                                    .overlay(Capsule().stroke(.white.opacity(0.76), lineWidth: 1))
+                            )
                         }
-                        .frame(width: 60, height: 22)
-                        .background(
-                            Capsule()
-                                .fill(.white.opacity(0.48))
-                                .overlay(Capsule().stroke(.white.opacity(0.76), lineWidth: 1))
-                        )
                     }
                 }
+                Text(scores.todaySummary)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(hex: "496A83"))
+                    .lineSpacing(2)
+                    .lineLimit(compactProgress > 0.7 ? 1 : 2)
+                    .accessibilityIdentifier("xage.score.trust.notice")
             }
-            Text(scores.todaySummary)
-                .font(.system(size: 13))
-                .foregroundStyle(Color(hex: "496A83"))
-                .lineSpacing(2)
-                .lineLimit(compactProgress > 0.7 ? 1 : 2)
-                .accessibilityIdentifier("xage.score.trust.notice")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12 - 2 * compactProgress)
         .background(XAgeGlassCardBackground(cornerRadius: 24))
+    }
+}
+
+private struct XAgeScoreDataPrompt: View {
+    let title: String
+    let icon: String
+    let message: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Color(hex: "237FC4"))
+                .frame(width: 34, height: 34)
+                .background(Color(hex: "DCF4FF"), in: Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color(hex: "173F64"))
+                Text(message)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(hex: "496A83"))
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("xage.score.trust.notice")
+            }
+        }
     }
 }

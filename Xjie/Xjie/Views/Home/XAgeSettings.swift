@@ -82,13 +82,13 @@ struct XAgeMoreMenu: View {
                             .foregroundStyle(Color(hex: "5D7890"))
                             .padding(.horizontal, 4)
 
-                        XAgeAccountMenuRow(
-                            icon: "person.text.rectangle.fill",
-                            title: "个人信息与权限",
-                            subtitle: "资料完整度、健康权限和隐私授权"
-                        ) {
-                            showPersonalInfo = true
-                        }
+//                        XAgeAccountMenuRow(
+//                            icon: "person.text.rectangle.fill",
+//                            title: "个人信息与权限",
+//                            subtitle: "资料完整度、健康权限和隐私授权"
+//                        ) {
+//                            showPersonalInfo = true
+//                        }
                         XAgeAccountMenuRow(
                             icon: "lock.shield.fill",
                             title: "账号与安全",
@@ -273,15 +273,13 @@ private struct XAgeAccountSecurityView: View {
             ) {
                 showLogoutConfirm = true
             }
-            XAgeAccountSecurityRow(
-                icon: "person.crop.circle.badge.xmark",
-                title: "注销账号",
-                subtitle: "永久停用当前账号，此操作不可逆",
-                destructive: true,
-                identifier: "xage.account.注销账号"
-            ) {
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            XAgeAccountDeletionFooter {
                 showDeleteConfirm = true
             }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 12)
         }
         .sheet(isPresented: $showChangePassword) {
             ChangePasswordSheet()
@@ -310,12 +308,30 @@ private struct XAgeAccountSecurityView: View {
     }
 }
 
+/// 注销保留为独立、低强调的页尾操作；风险说明与确认输入留在下一页，避免与常规安全设置竞争视觉注意力。
+private struct XAgeAccountDeletionFooter: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text("注销账号")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color(hex: "A15D67").opacity(0.72))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("注销账号")
+        .accessibilityHint("永久停用当前账号，此操作不可逆")
+        .accessibilityIdentifier("xage.account.注销账号")
+    }
+}
+
 private struct XAgeAccountSecurityRow: View {
     let icon: String
     let title: String
     var subtitle: String? = nil
     var value: String? = nil
-    var destructive = false
     let identifier: String
     var action: (() -> Void)? = nil
 
@@ -338,13 +354,13 @@ private struct XAgeAccountSecurityRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(destructive ? Color(hex: "D85A66") : Color(hex: "237FC4"))
+                .foregroundStyle(Color(hex: "237FC4"))
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(.white.opacity(0.62)))
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(destructive ? Color(hex: "B84350") : Color(hex: "173F64"))
+                    .foregroundStyle(Color(hex: "173F64"))
                 if let subtitle {
                     Text(subtitle)
                         .font(.system(size: 12, weight: .medium))
@@ -1040,5 +1056,16 @@ private struct XAgeSettingsPreviewHost: View {
 
 #Preview("XAGE 更多菜单") {
     XAgeSettingsPreviewHost()
+}
+
+#Preview("账号与安全") {
+    XAgeAccountSecurityView(
+        phone: "13800138000",
+        isLoading: false,
+        isDeleting: false,
+        onClose: {},
+        onLogout: {},
+        onDeleteAccount: { false }
+    )
 }
 #endif

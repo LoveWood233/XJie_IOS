@@ -845,6 +845,11 @@ final class XAgeHighIntensityContextUITests: XAgeUITestCase {
         XCTAssertTrue(app.staticTexts["xage.account.security.phone"].waitForExistence(timeout: 6), "账号安全页应展示脱敏手机号")
         XCTAssertTrue(app.buttons["xage.account.退出登录"].waitForExistence(timeout: 4), "账号安全页应提供退出登录入口")
         let deleteAccount = app.buttons["xage.account.注销账号"]
+        XCTAssertGreaterThanOrEqual(
+            deleteAccount.frame.minY - app.buttons["xage.account.退出登录"].frame.maxY,
+            72,
+            "注销入口应与常规账号操作分离并位于页面底部区域"
+        )
         scrollIntoViewOnActiveScreen(deleteAccount, direction: .up, maxSwipes: 6)
         deleteAccount.tap()
         let deleteInput = app.textFields["xage.account.delete.input"]
@@ -864,8 +869,41 @@ final class XAgeHighIntensityContextUITests: XAgeUITestCase {
         app.buttons["取消"].tap()
         XCTAssertTrue(app.buttons["xage.account.注销账号"].waitForExistence(timeout: 5), "取消注销后应回到账号安全页且保持登录")
 
+        let closeAccountSecurity = app.buttons["xage.settings.close.账号与安全"]
+        XCTAssertTrue(closeAccountSecurity.waitForExistence(timeout: 4), "账号安全页应提供独立的关闭入口")
+        closeAccountSecurity.tap()
         closeSettingsMenu()
         XCTAssertTrue(app.buttons["xage.segment.数据"].waitForExistence(timeout: 6), "关闭设置后应回到数据页")
+    }
+
+    func testAccountSecurityPlacesDeletionInLowEmphasisFooter() {
+        launchApplication()
+        enterDebugValidationSession()
+        tapAndWait(app.buttons["xage.more"], for: app.buttons["xage.more.category.profile"])
+
+        let accountSecurity = app.buttons["xage.account.security"]
+        scrollIntoViewOnActiveScreen(accountSecurity, direction: .up, maxSwipes: 6)
+        accountSecurity.tap()
+
+        let logout = app.buttons["xage.account.退出登录"]
+        XCTAssertTrue(logout.waitForExistence(timeout: 5), "账号安全页应提供退出登录入口")
+        let deleteAccount = app.buttons["xage.account.注销账号"]
+        XCTAssertGreaterThanOrEqual(
+            deleteAccount.frame.minY - logout.frame.maxY,
+            72,
+            "注销入口应与常规账号操作分离并位于页面底部区域"
+        )
+        XCTAssertLessThanOrEqual(
+            app.frame.maxY - deleteAccount.frame.maxY,
+            64,
+            "注销入口应固定在屏幕安全区域底部，而不是随内容停留在中间"
+        )
+
+        XCTAssertTrue(deleteAccount.isHittable, "页尾注销入口应保留完整触控区域")
+        deleteAccount.tap()
+        XCTAssertTrue(app.textFields["xage.account.delete.input"].waitForExistence(timeout: 5), "注销入口仍应进入不可逆确认页")
+        app.buttons["取消"].tap()
+        XCTAssertTrue(deleteAccount.waitForExistence(timeout: 5), "取消注销后应返回账号安全页")
     }
 
     private func sendPrompt(
