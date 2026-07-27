@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "change_id": "2026-07-27-xage-score-summary-card-width",
+  "change_id": "2026-07-27-xage-score-dashboard-debug-preview",
   "change_type": "ui_behavior",
-  "current_scope": "修复 iOS XAGE 数据首页三评分说明卡的宽度：让说明卡在简短或详细状态下均占满评分头部的可用宽度，并与圆环卡和下方模块共用页面 24pt 外边距。评分数据、说明分支、圆环详情点击、同步行为、后端、Android 和指标详情不修改。",
-  "current_root_cause": "说明卡仅按内部文案的固有宽度布局，未声明占满父容器；文案缩短后卡片会收缩，视觉宽度与圆环卡和下方全宽模块不一致。",
-  "current_risk_hypothesis": "全宽约束必须放在说明卡内边距之后、背景之前，才能扩展玻璃背景而不改变内容内边距；不能改变评分说明、圆环点击或页面外层的统一 24pt 边距。",
-  "summary": "让 XAGE 首页三评分说明卡始终占满评分头部可用宽度，与其他模块对齐。",
-  "root_cause": "说明卡缺少 maxWidth 约束，短文案状态下背景按内容宽度收缩。",
-  "risk_hypothesis": "在内边距之后添加 maxWidth: .infinity，使玻璃背景始终与评分头部及下方模块对齐。",
+  "current_scope": "为 iOS XAGE 首页三评分添加仅 DEBUG 可用的交互式 Canvas Preview：可分别修改压力、恢复、炎症的 0...100 分数，实时查看评分圆环、置信度刻度与说明卡。正式评分数据、说明分支、圆环详情点击、同步行为、后端、Android 和指标详情不修改。",
+  "current_root_cause": "评分圆环与说明卡缺少隔离的本地数据宿主，调试不同分数时只能依赖真实页面状态或修改生产输入，难以快速校验视觉细节。",
+  "current_risk_hypothesis": "Preview 必须在 DEBUG 下使用局部 @State 和明确标记的 Canvas 数据，不能读取真实账号、发起网络请求或改变生产可信评分策略；输入分数需要限制在 0...100。",
+  "summary": "新增可编辑三项评分数字的 DEBUG Canvas Preview，用于调试首页评分圆环和说明卡。",
+  "root_cause": "现有评分组件没有带本地可编辑数据的预览入口。",
+  "risk_hypothesis": "Preview 通过局部 @State 和 0...100 Stepper 构造已就绪的本地评分；正式页面仍只消费既有可信评分输入。",
   "impacted_domains": [
     "ios_ui_interaction",
     "ios_health_client",
@@ -21,23 +21,23 @@
     "TEST-SUITE-INTEGRITY-001"
   ],
   "same_class_scan": [
-    "扫描 XAgeDataDashboardView.stickyHeader、metricList、XAgeScoreRingPanel 和 XAgeScoreSummaryCard，确认评分头部与下方模块均由 24pt 外边距约束，说明卡只补充自身的全宽布局。",
+    "扫描 XAgeScoreRing、XAgeScoreSummaryCard、XAgeTrustedScorePresentationPolicy 与现有 XAgeComponents DEBUG Preview，确认新宿主仅在 Canvas 内组合既有组件和局部数据。",
     "扫描评分圆环详情回调和服务端可信评分策略，确认本次不更改评分生成、服务端版本化门槛、置信度刻度或圆环点击入口。"
   ],
   "tests_added_or_updated": [
-    "XjieTests/XAgeCompositeScoresTests.testScoreSummaryCardFillsProposedHeaderWidth（验证说明卡在给定评分头部宽度时占满可用宽度，短文案不会收缩背景）"
+    "XjieTests/XAgeCompositeScoresTests.testScoreDashboardPreviewReflectsEditedScores（验证 Preview 编辑后的三项分数进入对应圆环输入，并限制到 0...100）"
   ],
   "verification_plan": [
-    "运行评分状态 focused 单元测试与 generic iOS Simulator Debug build，确认说明分支和 SwiftUI 编译。",
-    "手动检查简短和详细说明卡均与圆环卡、快捷功能和 Apple 健康卡左右对齐；确认内容内边距、圆环详情入口不变。",
+    "运行 Preview focused 单元测试与 generic iOS Simulator Debug build，确认局部评分输入、数值限制和 SwiftUI 编译。",
+    "在 Xcode Canvas 打开“首页三评分调试”，分别调节三个 Stepper，确认圆环数字、进度、置信度刻度和说明卡实时更新，且不触发网络请求。",
     "运行 JSON 解析、git diff --check 与 fast 门禁；不将其描述为后端、真机或 TestFlight 验证。"
   ],
   "manual_checks": [
-    "在小屏、大字号和 VoiceOver 下确认说明卡全宽背景与内容内边距可读，圆环和信息按钮可点。",
-    "验证简短和详细说明状态的左右边缘均与圆环卡、快捷功能和 Apple 健康卡一致。"
+    "在 Canvas 中验证 0、低分、中分和 100 分时三个圆环的数字、弧线和底部开口可读。",
+    "验证 Stepper 可独立编辑压力、恢复、炎症，说明卡与圆环卡仍保持现有样式。"
   ],
   "unresolved_risks": [
-    "自动化验证编译与评分状态分支，不能替代真实设备上的卡片边缘、文案换行、Dynamic Type 和 VoiceOver 验收。",
-    "当前生产可信评分策略可能持续返回待更新；本次只修复说明卡宽度，不影响服务端版本化快照接入。"
+    "自动化验证 Preview 的本地输入映射与范围，不能替代 Xcode Canvas 交互、真实设备上的动态字体和 VoiceOver 验收。",
+    "Preview 是 DEBUG 专用调试工具；当前生产可信评分策略和服务端版本化快照接入保持不变。"
   ]
 }

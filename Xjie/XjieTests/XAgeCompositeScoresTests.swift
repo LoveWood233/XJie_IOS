@@ -398,6 +398,21 @@ final class XAgeCompositeScoresTests: XCTestCase {
         XCTAssertEqual(size.width, targetWidth, accuracy: 0.5)
     }
 
+    func testScoreDashboardPreviewReflectsEditedScores() {
+        let scores = XAgeScoreDashboardPreview.debugScores(
+            pressure: 12,
+            recovery: 67,
+            inflammation: 105
+        )
+
+        XCTAssertEqual(scores.pressure.value, 12)
+        XCTAssertEqual(scores.recovery.value, 67)
+        XCTAssertEqual(scores.inflammation.value, 100)
+        XCTAssertTrue(scores.pressure.isReady)
+        XCTAssertTrue(scores.recovery.isReady)
+        XCTAssertTrue(scores.inflammation.isReady)
+    }
+
     private func sample(metricID: String, name: String, value: Double, unit: String) -> AppleHealthSyncSample {
         AppleHealthSyncSample(
             id: "\(metricID)-test",

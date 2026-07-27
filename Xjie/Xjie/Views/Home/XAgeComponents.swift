@@ -192,7 +192,81 @@ struct XAgeStyleComponentsPreview: View {
     }
 }
 
+/// 仅供 Canvas 调整三评分与说明卡视觉效果，不读取真实账号或服务端数据。
+struct XAgeScoreDashboardPreview: View {
+    @State private var pressure = 45
+    @State private var recovery = 60
+    @State private var inflammation = 41
+
+    private var scores: XAgeCompositeScores {
+        Self.debugScores(pressure: pressure, recovery: recovery, inflammation: inflammation)
+    }
+
+    var body: some View {
+        ZStack {
+            XAgeLiquidBackground().ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("今日健康数据 · 调试")
+                        .font(.system(size: 25, weight: .bold))
+                        .foregroundStyle(Color(hex: "123E67"))
+                    HStack(spacing: 0) {
+                        XAgeScoreRing(kind: .pressure, metric: scores.pressure)
+                        XAgeScoreRing(kind: .recovery, metric: scores.recovery)
+                        XAgeScoreRing(kind: .inflammation, metric: scores.inflammation)
+                    }
+                    .padding(.vertical, 12)
+                    .background(XAgeGlassCardBackground(cornerRadius: 28))
+                    XAgeScoreSummaryCard(compactProgress: 0, scores: scores)
+                    VStack(spacing: 8) {
+                        scoreControl("压力", value: $pressure, tint: XAgeDataKind.pressure.tint)
+                        scoreControl("恢复", value: $recovery, tint: XAgeDataKind.recovery.tint)
+                        scoreControl("炎症", value: $inflammation, tint: XAgeDataKind.inflammation.tint)
+                    }
+                }
+                .padding(24)
+            }
+        }
+    }
+
+    static func debugScores(pressure: Int, recovery: Int, inflammation: Int) -> XAgeCompositeScores {
+        XAgeCompositeScores(
+            pressure: debugMetric(pressure, name: "压力", confidence: 72),
+            recovery: debugMetric(recovery, name: "恢复", confidence: 86),
+            inflammation: debugMetric(inflammation, name: "炎症", confidence: 64),
+            xAge: XAgeTrustedScorePresentationPolicy.currentPresentation().xAge
+        )
+    }
+
+    private static func debugMetric(_ value: Int, name: String, confidence: Int) -> XAgeMetricScore {
+        XAgeMetricScore(
+            value: min(100, max(0, value)), confidence: confidence, isReady: true,
+            badgeLabel: "已评分", stateLabel: "\(name)稳定", summary: "Canvas 调试数据",
+            simpleExplanation: "仅用于预览", explanation: "仅用于预览", nextAction: "仅用于预览",
+            fields: [], drivers: [], isProxy: false
+        )
+    }
+
+    private func scoreControl(_ title: String, value: Binding<Int>, tint: Color) -> some View {
+        Stepper(value: value, in: 0...100) {
+            HStack {
+                Text(title).font(.system(size: 15, weight: .bold))
+                Spacer()
+                Text("\(value.wrappedValue)").foregroundStyle(tint)
+            }
+            .foregroundStyle(Color(hex: "173F64"))
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 44)
+        .background(XAgeGlassCardBackground(cornerRadius: 16))
+    }
+}
+
 #Preview("XAGE 样式组件") {
     XAgeStyleComponentsPreview()
+}
+
+#Preview("首页三评分调试") {
+    XAgeScoreDashboardPreview()
 }
 #endif
