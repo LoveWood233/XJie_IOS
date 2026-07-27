@@ -367,6 +367,10 @@ final class XAgeCompositeScoresTests: XCTestCase {
         XCTAssertEqual(XAgeScoreStatusPresentation.confidenceProgress(for: metric(isReady: true, confidence: 140)), 1)
     }
 
+    func testScoreRingGapIsAnchoredAtBottom() {
+        XCTAssertEqual(XAgeScoreRing.gapRotationDegrees, 90)
+    }
+
     private func sample(metricID: String, name: String, value: Double, unit: String) -> AppleHealthSyncSample {
         AppleHealthSyncSample(
             id: "\(metricID)-test",

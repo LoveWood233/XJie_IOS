@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "change_id": "2026-07-27-xage-score-empty-state-prompt",
+  "change_id": "2026-07-27-xage-score-ring-bottom-gap",
   "change_type": "ui_behavior",
-  "current_scope": "优化 iOS XAGE 数据首页三评分说明卡的“无任何评分支撑数据”状态：只显示数据不足、上传支撑数据和点击评分圆环查看详情的简短引导。单项缺失、已有评分、评分计算、服务端可信展示策略、同步行为、后端、Android 和指标详情不修改。",
-  "current_root_cause": "三项评分均无支撑数据时，说明卡输出了硬件、Apple 健康、体检报告和所有评分种类等过多内容；具体缺失数据本应由用户通过对应评分圆环进入详情页查看。",
-  "current_risk_hypothesis": "精简文案必须仅适用于三项均无支撑数据的首次状态；不得移除圆环详情入口或将数据上传、同步完成表述为评分已生成。",
-  "summary": "精简 XAGE 三评分在无评分支撑数据时的说明卡，仅保留数据不足、上传支撑数据及点击圆环查看所需数据的引导。",
-  "root_cause": "首次使用说明复用了泛化的数据来源说明，导致首页在没有任何评分支撑数据时信息密度过高。",
-  "risk_hypothesis": "首次使用只在三项均无支撑数据时显示简短说明；部分缺失仍按原逻辑展示对应提示；评分圆环继续提供详情入口。",
+  "current_scope": "调整 iOS XAGE 数据首页三评分圆环的开口位置：将底层弧线和评分进度弧线的开口从正上方旋转至正下方。评分值、置信度刻度、圆环详情点击、说明卡、同步行为、后端、Android 和指标详情不修改。",
+  "current_root_cause": "评分圆环的底层弧线和进度弧线均使用 -90° 旋转，导致两者的开口固定在正上方，与页面设计不符。",
+  "current_risk_hypothesis": "两段弧线必须使用同一旋转常量，否则进度会与底环错位；仅改变视觉朝向，不能改变 trim 范围、分数进度、置信度刻度或可点击区域。",
+  "summary": "将 XAGE 首页三评分圆环的共同开口移动至正下方。",
+  "root_cause": "圆环几何使用上方开口的固定旋转值，未将视觉开口锚定为底部。",
+  "risk_hypothesis": "底环和进度弧线共同使用 +90° 常量；分数与置信度数据及圆环详情入口保持不变。",
   "impacted_domains": [
     "ios_ui_interaction",
     "ios_health_client",
@@ -21,23 +21,23 @@
     "TEST-SUITE-INTEGRITY-001"
   ],
   "same_class_scan": [
-    "扫描 XAgeDataStickyHeader、XAgeScoreRing、XAgeScoreSummaryCard、XAgeCompositeScores 和 XAgeMetricScore，确认精简文案只消费已有的 isReady/confidence 状态。",
-    "扫描评分圆环详情回调和服务端可信评分策略，确认本次不更改评分生成、服务端版本化门槛或圆环点击入口。"
+    "扫描 XAgeScoreRing 的底环、进度弧线、置信度刻度和点击包装，确认只有两段带开口的弧线改变旋转方向。",
+    "扫描评分圆环详情回调和服务端可信评分策略，确认本次不更改评分生成、服务端版本化门槛、置信度刻度或圆环点击入口。"
   ],
   "tests_added_or_updated": [
-    "XjieTests/XAgeCompositeScoresTests.testScoreStatusPresentationSeparatesFirstUseMissingDataAndReadyState（验证首次使用简短文案不列举 HRV 等具体缺口、部分缺失和置信度上限契约）"
+    "XjieTests/XAgeCompositeScoresTests.testScoreRingGapIsAnchoredAtBottom（验证三评分圆环共用的缺口旋转常量为 +90°）"
   ],
   "verification_plan": [
-    "运行评分状态 focused 单元测试与 generic iOS Simulator Debug build，确认状态分支和 SwiftUI 编译。",
-    "手动检查三项均无支撑数据时只出现简短上传引导，点击每个圆环仍进入对应详情；确认单项缺失与三项评分齐全时的说明文案未改变。",
+    "运行评分圆环 focused 单元测试与 generic iOS Simulator Debug build，确认圆环几何常量和 SwiftUI 编译。",
+    "手动检查压力、恢复、炎症三个圆环的底环和进度弧线均在正下方开口；确认内圈置信度刻度、分数显示和点击详情入口未改变。",
     "运行 JSON 解析、git diff --check 与 fast 门禁；不将其描述为后端、真机或 TestFlight 验证。"
   ],
   "manual_checks": [
-    "在小屏、大字号和 VoiceOver 下确认三个圆环均分卡片、内圈刻度可读，圆环和信息按钮可点。",
-    "验证无数据时只提示数据不足、上传支撑数据和圆环详情入口；某项 -- 时仍提示该项缺失输入；三项评分均有值时显示今日状态。"
+    "在小屏、大字号和 VoiceOver 下确认三个圆环均分卡片、底部开口和内圈刻度可读，圆环和信息按钮可点。",
+    "验证无数据、部分缺失和已有评分三种状态下，三个圆环的开口均在正下方，且详情入口不受影响。"
   ],
   "unresolved_risks": [
-    "自动化验证状态、文案与置信度范围契约，不能替代真实设备上的圆环视觉对称性、动画、Dynamic Type 和 VoiceOver 验收。",
-    "当前生产可信评分策略可能持续返回待更新；页面会正确显示简短上传引导，但真实评分仍取决于后端版本化快照接入。"
+    "自动化验证共同旋转常量，不能替代真实设备上的圆环视觉位置、动画、Dynamic Type 和 VoiceOver 验收。",
+    "当前生产可信评分策略可能持续返回待更新；本次仅调整圆环开口方向，不影响服务端版本化快照接入。"
   ]
 }

@@ -140,6 +140,9 @@ enum XAgeDataKind: String, Identifiable {
 
 /// 单项评分圆环，同时承载数值、状态和可信展示语义。
 struct XAgeScoreRing: View {
+    /// 圆环缺口居中于底部；底层弧线与评分进度弧线必须使用同一方向。
+    static let gapRotationDegrees = 90.0
+
     /// 评分种类，决定标题、颜色和辅助功能 ID。
     let kind: XAgeDataKind
     /// 当前评分值、置信度、状态与可信展示标记。
@@ -205,7 +208,7 @@ struct XAgeScoreRing: View {
             Circle()
                 .trim(from: 0.12, to: 0.88)
                 .stroke(Color.white.opacity(0.52), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+                .rotationEffect(.degrees(Self.gapRotationDegrees))
             Circle()
                 .trim(from: 0.12, to: 0.12 + 0.76 * scoreProgress)
                 .stroke(
@@ -215,7 +218,7 @@ struct XAgeScoreRing: View {
                 ),
                 style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
-                .rotationEffect(.degrees(-90))
+                .rotationEffect(.degrees(Self.gapRotationDegrees))
                 .opacity(metric.isReady ? 1 : 0.28)
                 .shadow(color: kind.tint.opacity(metric.isReady ? 0.22 : 0.08), radius: 8, x: 0, y: 3)
             XAgeScoreConfidenceTicks(
