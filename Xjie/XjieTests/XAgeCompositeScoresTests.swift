@@ -354,6 +354,16 @@ final class XAgeCompositeScoresTests: XCTestCase {
         )
         XCTAssertFalse(XAgeScoreStatusPresentation.noSupportDataPromptMessage.contains("HRV"))
 
+        // 即使有零散输入，只要三项均未生成评分，也应保持首页简短说明。
+        let pendingWithEvidence = XAgeCompositeScores(
+            pressure: metric(isReady: false, confidence: 28),
+            recovery: metric(isReady: false, confidence: 16),
+            inflammation: metric(isReady: false, confidence: 22),
+            xAge: empty.xAge
+        )
+        XCTAssertTrue(XAgeScoreStatusPresentation.isFirstUse(scores: pendingWithEvidence))
+        XCTAssertFalse(XAgeScoreStatusPresentation.needsData(scores: pendingWithEvidence))
+
         let partial = XAgeCompositeScores(
             pressure: metric(isReady: true, confidence: 72),
             recovery: metric(isReady: false, confidence: 24),
