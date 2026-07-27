@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "change_id": "2026-07-27-xage-score-all-pending-prompt",
+  "change_id": "2026-07-27-xage-score-summary-card-width",
   "change_type": "ui_behavior",
-  "current_scope": "修复 iOS XAGE 数据首页三评分说明卡：三项评分均为未就绪（均显示 --）时，无论零散输入带来的 confidence 值为何，都只显示“评分数据不足”的两行简短引导。任一评分已生成后，才保留原有部分缺失的详细提示。评分计算、圆环详情点击、同步行为、后端、Android 和指标详情不修改。",
-  "current_root_cause": "首页把“全部未就绪”额外限制为每项 confidence 均为 0；有零散输入但未达到评分门槛时，三项均显示 -- 却错误落入“补齐评分数据”分支，输出大量缺失项文案。",
-  "current_risk_hypothesis": "简短分支应只依据三项 isReady 状态，不能因 confidence 非零而泄漏详细缺失项；任一评分生成后，部分缺失分支必须仍可显示对应提示，圆环详情入口不能改变。",
-  "summary": "将三项均未生成评分的状态统一为“评分数据不足”简短说明，避免零散输入时输出详细缺失项文案。",
-  "root_cause": "首页空评分状态错误使用 confidence==0 作为额外判定，未覆盖全部评分均为 -- 但存在零散输入的状态。",
-  "risk_hypothesis": "只要三项 isReady 均为 false 就显示简短说明；至少一项 isReady 为 true 时才进入部分缺失或今日状态分支。",
+  "current_scope": "修复 iOS XAGE 数据首页三评分说明卡的宽度：让说明卡在简短或详细状态下均占满评分头部的可用宽度，并与圆环卡和下方模块共用页面 24pt 外边距。评分数据、说明分支、圆环详情点击、同步行为、后端、Android 和指标详情不修改。",
+  "current_root_cause": "说明卡仅按内部文案的固有宽度布局，未声明占满父容器；文案缩短后卡片会收缩，视觉宽度与圆环卡和下方全宽模块不一致。",
+  "current_risk_hypothesis": "全宽约束必须放在说明卡内边距之后、背景之前，才能扩展玻璃背景而不改变内容内边距；不能改变评分说明、圆环点击或页面外层的统一 24pt 边距。",
+  "summary": "让 XAGE 首页三评分说明卡始终占满评分头部可用宽度，与其他模块对齐。",
+  "root_cause": "说明卡缺少 maxWidth 约束，短文案状态下背景按内容宽度收缩。",
+  "risk_hypothesis": "在内边距之后添加 maxWidth: .infinity，使玻璃背景始终与评分头部及下方模块对齐。",
   "impacted_domains": [
     "ios_ui_interaction",
     "ios_health_client",
@@ -21,23 +21,23 @@
     "TEST-SUITE-INTEGRITY-001"
   ],
   "same_class_scan": [
-    "扫描 XAgeScoreStatusPresentation.isFirstUse、needsData、XAgeScoreSummaryCard 和 XAgeMetricScore，确认三项均未就绪时只能进入简短说明分支。",
+    "扫描 XAgeDataDashboardView.stickyHeader、metricList、XAgeScoreRingPanel 和 XAgeScoreSummaryCard，确认评分头部与下方模块均由 24pt 外边距约束，说明卡只补充自身的全宽布局。",
     "扫描评分圆环详情回调和服务端可信评分策略，确认本次不更改评分生成、服务端版本化门槛、置信度刻度或圆环点击入口。"
   ],
   "tests_added_or_updated": [
-    "XjieTests/XAgeCompositeScoresTests.testScoreStatusPresentationSeparatesFirstUseMissingDataAndReadyState（验证三项均未就绪但 confidence 非零时仍使用简短说明；任一评分就绪后才显示部分缺失提示）"
+    "XjieTests/XAgeCompositeScoresTests.testScoreSummaryCardFillsProposedHeaderWidth（验证说明卡在给定评分头部宽度时占满可用宽度，短文案不会收缩背景）"
   ],
   "verification_plan": [
-    "运行评分状态 focused 单元测试与 generic iOS Simulator Debug build，确认三项均未就绪和部分缺失分支以及 SwiftUI 编译。",
-    "手动检查三项均显示 -- 时只出现指定的两行文案；任一评分生成后才可出现详细部分缺失提示，点击评分圆环仍可进入详情。",
+    "运行评分状态 focused 单元测试与 generic iOS Simulator Debug build，确认说明分支和 SwiftUI 编译。",
+    "手动检查简短和详细说明卡均与圆环卡、快捷功能和 Apple 健康卡左右对齐；确认内容内边距、圆环详情入口不变。",
     "运行 JSON 解析、git diff --check 与 fast 门禁；不将其描述为后端、真机或 TestFlight 验证。"
   ],
   "manual_checks": [
-    "在小屏、大字号和 VoiceOver 下确认三项均未就绪时简短说明可读，圆环和信息按钮可点。",
-    "验证 confidence 为 0 或非零的三项 -- 状态均显示简短说明；任一评分生成后保留对应的部分缺失提示与详情入口。"
+    "在小屏、大字号和 VoiceOver 下确认说明卡全宽背景与内容内边距可读，圆环和信息按钮可点。",
+    "验证简短和详细说明状态的左右边缘均与圆环卡、快捷功能和 Apple 健康卡一致。"
   ],
   "unresolved_risks": [
-    "自动化验证评分状态分支，不能替代真实设备上的文案换行、Dynamic Type 和 VoiceOver 验收。",
-    "当前生产可信评分策略可能持续返回待更新；本次只修复说明卡分支，不影响服务端版本化快照接入。"
+    "自动化验证编译与评分状态分支，不能替代真实设备上的卡片边缘、文案换行、Dynamic Type 和 VoiceOver 验收。",
+    "当前生产可信评分策略可能持续返回待更新；本次只修复说明卡宽度，不影响服务端版本化快照接入。"
   ]
 }

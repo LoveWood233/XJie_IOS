@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import XCTest
 @testable import Xjie
 
@@ -379,6 +380,22 @@ final class XAgeCompositeScoresTests: XCTestCase {
 
     func testScoreRingGapIsAnchoredAtBottom() {
         XCTAssertEqual(XAgeScoreRing.gapRotationDegrees, 90)
+    }
+
+    func testScoreSummaryCardFillsProposedHeaderWidth() {
+        let targetWidth: CGFloat = 280
+        let host = UIHostingController(
+            rootView: XAgeScoreSummaryCard(
+                compactProgress: 0,
+                scores: XAgeTrustedScorePresentationPolicy.currentPresentation()
+            )
+        )
+
+        let size = host.sizeThatFits(
+            in: CGSize(width: targetWidth, height: .greatestFiniteMagnitude)
+        )
+
+        XCTAssertEqual(size.width, targetWidth, accuracy: 0.5)
     }
 
     private func sample(metricID: String, name: String, value: Double, unit: String) -> AppleHealthSyncSample {

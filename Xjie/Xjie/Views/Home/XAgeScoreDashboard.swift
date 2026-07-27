@@ -298,7 +298,7 @@ private struct XAgeScoreConfidenceTicks: View {
     }
 }
 
-private struct XAgeScoreSummaryCard: View {
+struct XAgeScoreSummaryCard: View {
     let compactProgress: CGFloat
     let scores: XAgeCompositeScores
 
@@ -365,7 +365,9 @@ private struct XAgeScoreSummaryCard: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12 - 2 * compactProgress)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(XAgeGlassCardBackground(cornerRadius: 24))
+        .accessibilityIdentifier("xage.score.summary.card")
     }
 }
 
