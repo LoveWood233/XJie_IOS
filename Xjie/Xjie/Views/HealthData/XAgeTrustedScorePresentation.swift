@@ -69,6 +69,10 @@ struct XAgeCompositeScores: Equatable {
 /// 首页评分摘要的展示状态。评分数值和置信度仍由既有可信评分输入决定，
 /// 本类型只将“无数据 / 缺少某项 / 可展示今日状态”转成稳定的 UI 决策。
 enum XAgeScoreStatusPresentation {
+    /// 三项评分均无支撑数据时的首页简短引导；具体缺口交由评分详情页说明。
+    static let noSupportDataPromptTitle = "评分数据不足"
+    static let noSupportDataPromptMessage = "当前数据不足以支撑评分，请上传评分支撑数据。点击对应评分圆环，可查看所需数据。"
+
     static func isFirstUse(scores: XAgeCompositeScores) -> Bool {
         allMetrics(scores).allSatisfy { !$0.isReady && $0.confidence == 0 }
     }

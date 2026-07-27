@@ -338,9 +338,21 @@ final class XAgeCompositeScoresTests: XCTestCase {
             )
         }
 
-        let empty = XAgeCompositeScores.compute(context: XAgeAlgorithmContext())
+        // 不使用算法上下文的默认回退值，显式表达三项均没有评分支撑数据的首页状态。
+        let empty = XAgeCompositeScores(
+            pressure: metric(isReady: false, confidence: 0),
+            recovery: metric(isReady: false, confidence: 0),
+            inflammation: metric(isReady: false, confidence: 0),
+            xAge: XAgeCompositeScores.compute(context: XAgeAlgorithmContext()).xAge
+        )
         XCTAssertTrue(XAgeScoreStatusPresentation.isFirstUse(scores: empty))
         XCTAssertEqual(XAgeScoreStatusPresentation.missingKinds(scores: empty), [.pressure, .recovery, .inflammation])
+        XCTAssertEqual(XAgeScoreStatusPresentation.noSupportDataPromptTitle, "评分数据不足")
+        XCTAssertEqual(
+            XAgeScoreStatusPresentation.noSupportDataPromptMessage,
+            "当前数据不足以支撑评分，请上传评分支撑数据。点击对应评分圆环，可查看所需数据。"
+        )
+        XCTAssertFalse(XAgeScoreStatusPresentation.noSupportDataPromptMessage.contains("HRV"))
 
         let partial = XAgeCompositeScores(
             pressure: metric(isReady: true, confidence: 72),

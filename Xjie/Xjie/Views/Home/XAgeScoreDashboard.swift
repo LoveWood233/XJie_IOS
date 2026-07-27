@@ -315,9 +315,9 @@ private struct XAgeScoreSummaryCard: View {
         VStack(alignment: .leading, spacing: 8 - 2 * compactProgress) {
             if XAgeScoreStatusPresentation.isFirstUse(scores: scores) {
                 XAgeScoreDataPrompt(
-                    title: "开始获取评分数据",
+                    title: XAgeScoreStatusPresentation.noSupportDataPromptTitle,
                     icon: "waveform.path.ecg",
-                    message: "使用小捷硬件、同步 Apple 健康或上传体检报告单后，可逐步获得压力、恢复和炎症评分。"
+                    message: XAgeScoreStatusPresentation.noSupportDataPromptMessage
                 )
             } else if XAgeScoreStatusPresentation.needsData(scores: scores) {
                 XAgeScoreDataPrompt(
