@@ -108,7 +108,7 @@ struct XAgeDataDashboardView: View {
         )
         .padding(.horizontal, 24)
         .padding(.top, 16)
-        .padding(.bottom, 10)
+        .padding(.bottom, 7)
         .zIndex(2)
     }
 
@@ -176,11 +176,9 @@ struct XAgeDataDashboardView: View {
             ForEach(metrics) { card in
                 metricCard(card)
             }
-
-            metricLibraryEntries
         }
         .padding(.horizontal, 24)
-        .padding(.top, 10)
+        .padding(.top, 7)
         .padding(.bottom, 32)
     }
 
@@ -219,17 +217,6 @@ struct XAgeDataDashboardView: View {
                 )
             }
         )
-    }
-
-    @ViewBuilder
-    private var metricLibraryEntries: some View {
-        XAgeMetricLibraryEntryCard(
-            availableCount: availableCandidateCount,
-            totalCount: allCatalogMetrics.count,
-            onManage: { showsMetricManager = true }
-        )
-        .id("metric-library")
-        .accessibilityIdentifier("xage.data.metric.library")
     }
 
     private func metricCard(_ card: XAgeMetric) -> some View {
@@ -352,25 +339,12 @@ struct XAgeDataDashboardView: View {
         }
     }
 
-    private var availableCandidateMetrics: [XAgeMetric] {
-        let currentIDs = Set(metrics.map(\.id))
-        return allCatalogMetrics.filter { !currentIDs.contains($0.id) }
-    }
-
-    private var availableCandidateCount: Int {
-        availableCandidateMetrics.count
-    }
-
     private var metricOrderIDs: [String] {
         metrics.map(\.id)
     }
 
     private var metricCatalogSections: [XAgeMetricCatalogSection] {
         XAgeMetric.catalogSections(serverMetrics: serverSync.indicatorCatalogCards)
-    }
-
-    private var allCatalogMetrics: [XAgeMetric] {
-        dedupedMetrics(metrics + metricCatalogSections.flatMap(\.metrics))
     }
 
     private func addMetric(_ metric: XAgeMetric) {

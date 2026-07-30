@@ -155,7 +155,7 @@ struct XAgeScoreRing: View {
     var onInfo: (() -> Void)? = nil
 
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 5) {
             ringControl
 
             HStack(spacing: 3) {

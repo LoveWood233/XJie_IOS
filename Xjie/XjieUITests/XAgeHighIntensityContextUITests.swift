@@ -256,15 +256,12 @@ final class XAgeHighIntensityContextUITests: XAgeUITestCase {
     func testLoginKeyboardToolbarAndPasswordVisibilityFocus() throws {
         launchApplication()
 
-        let modeSwitch = app.buttons["login.mode.switch"]
-        XCTAssertTrue(modeSwitch.waitForExistence(timeout: 8), "登录页应显示登录方式切换按钮")
-        if modeSwitch.label == "使用手机号登录" {
-            modeSwitch.tap()
-        }
         let rootScroll = app.scrollViews.firstMatch
 
         let phone = app.textFields["login.phone"]
         XCTAssertTrue(phone.waitForExistence(timeout: 5), "手机号登录应显示手机号输入框")
+        XCTAssertFalse(app.buttons["xjie.debug.uiValidationLogin"].exists, "登录页不应显示 UI 验证入口")
+        XCTAssertFalse(app.buttons["login.mode.switch"].exists, "登录页不应显示受试者 ID 登录切换按钮")
         phone.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 4), "手机号输入框应打开 phonePad")
         phone.typeText("13800138000")
@@ -294,6 +291,11 @@ final class XAgeHighIntensityContextUITests: XAgeUITestCase {
 
         app.buttons["login.signup.toggle"].tap()
         XCTAssertTrue(app.textFields["login.username"].waitForExistence(timeout: 5), "切换注册后应显示用户名输入框")
+        XCTAssertTrue(app.staticTexts["基本数据"].exists, "注册页应显示基本数据模块标题")
+        for title in ["性别", "年龄（岁）", "身高（cm）", "体重（kg）"] {
+            XCTAssertTrue(app.staticTexts[title].exists, "基本数据应为\(title)提供标题")
+        }
+        XCTAssertFalse(app.staticTexts["最后一步：健康需求"].exists, "注册页暂不显示健康需求模块")
 
         for (identifier, name) in [
             ("login.age", "年龄 numberPad"),
@@ -314,10 +316,12 @@ final class XAgeHighIntensityContextUITests: XAgeUITestCase {
             return
         }
 
-        let validationButton = app.buttons["xjie.debug.uiValidationLogin"]
-        XCTAssertTrue(validationButton.waitForExistence(timeout: 8), "登录页应显示 Debug UI 验证入口")
-        validationButton.tap()
-        XCTAssertTrue(app.buttons["xage.segment.数据"].waitForExistence(timeout: 8), "点击 UI 验证入口后应进入 XAGE 数据页")
+        relaunchApplication(
+            resetAuth: false,
+            resetDataCards: false,
+            debugAuthenticated: true
+        )
+        XCTAssertTrue(app.buttons["xage.segment.数据"].waitForExistence(timeout: 8), "UI 自动化认证启动后应进入 XAGE 数据页")
         attachScreenshot(named: "01-entered-xage")
     }
 
@@ -536,13 +540,10 @@ final class XAgeHighIntensityContextUITests: XAgeUITestCase {
             XCTAssertTrue(app.navigationBars["数据卡片管理"].waitForExistence(timeout: 3), "添加候选指标后应停留在数据卡片管理页面")
         }
         closeMetricManagerPage()
-        let returnedManagerEntry = dataCardManagerEntry()
-        swipeUp(
-            until: returnedManagerEntry,
-            in: app.scrollViews["xage.data.scroll"],
-            maxSwipes: 10
+        XCTAssertFalse(
+            app.descendants(matching: .any)["xage.data.metric.library"].exists,
+            "首页底部不应显示数据卡片管理入口"
         )
-        XCTAssertTrue(returnedManagerEntry.isHittable, "返回后应能再次滚动到底部的数据卡片管理入口")
         attachScreenshot(named: "metric-manager")
     }
 
@@ -1162,27 +1163,7 @@ final class XAgeHighIntensityContextUITests: XAgeUITestCase {
     }
 
     private func openDataCardManager() {
-        let scroll = app.scrollViews["xage.data.scroll"]
-        let managerEntry = dataCardManagerEntry()
-        XCTAssertTrue(scroll.waitForExistence(timeout: 6), "数据页滚动区域应存在")
-        if !isVisibleOnScreen(managerEntry) {
-            swipeUp(until: managerEntry, in: scroll, maxSwipes: 10)
-        }
-        XCTAssertTrue(isVisibleOnScreen(managerEntry), "数据卡片管理入口应能滚动到可见位置")
-        tapAndWait(managerEntry, for: app.navigationBars["数据卡片管理"])
-        XCTAssertTrue(app.textFields["xage.metric.manager.search"].waitForExistence(timeout: 4), "管理页搜索框应存在")
-        XCTAssertTrue(app.navigationBars["数据卡片管理"].waitForExistence(timeout: 3), "应打开数据卡片管理页面")
-    }
-
-    private func dataCardManagerEntry() -> XCUIElement {
-        app.buttons.matching(
-            NSPredicate(
-                format: "identifier == %@ OR identifier == %@ OR label BEGINSWITH %@",
-                "xage.metric.library.manage",
-                "xage.data.metric.library",
-                "数据卡片管理"
-            )
-        ).firstMatch
+        openDataCardManagerFromTop()
     }
 
     private func searchMetricInManager(_ text: String) {

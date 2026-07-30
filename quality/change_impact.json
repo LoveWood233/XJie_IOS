@@ -1,43 +1,43 @@
 {
   "schema_version": 1,
-  "change_id": "2026-07-27-xage-score-dashboard-debug-preview",
-  "change_type": "ui_behavior",
-  "current_scope": "为 iOS XAGE 首页三评分添加仅 DEBUG 可用的交互式 Canvas Preview：可分别修改压力、恢复、炎症的 0...100 分数，实时查看评分圆环、置信度刻度与说明卡。正式评分数据、说明分支、圆环详情点击、同步行为、后端、Android 和指标详情不修改。",
-  "current_root_cause": "评分圆环与说明卡缺少隔离的本地数据宿主，调试不同分数时只能依赖真实页面状态或修改生产输入，难以快速校验视觉细节。",
-  "current_risk_hypothesis": "Preview 必须在 DEBUG 下使用局部 @State 和明确标记的 Canvas 数据，不能读取真实账号、发起网络请求或改变生产可信评分策略；输入分数需要限制在 0...100。",
-  "summary": "新增可编辑三项评分数字的 DEBUG Canvas Preview，用于调试首页评分圆环和说明卡。",
-  "root_cause": "现有评分组件没有带本地可编辑数据的预览入口。",
-  "risk_hypothesis": "Preview 通过局部 @State 和 0...100 Stepper 构造已就绪的本地评分；正式页面仍只消费既有可信评分输入。",
+  "change_id": "2026-07-30-report-upload-auth-identity",
+  "change_type": "auth_state_and_upload_reliability",
+  "current_scope": "修复报告上传在普通手机号登录后提示“当前登录信息不完整”的问题：上传所需数字用户 ID 直接从已登录 JWT 的 sub 获取，不再依赖 /api/users/me 的异步返回；首页服务端同步也将已验证的用户资料回写到 AuthManager。注册、报告上传接口、服务端 JWT 契约、账号切换隔离和其他上传流程不修改。",
+  "current_root_cause": "HealthReportCompletionViewModel 仅从 AuthManager.userInfo.id 或受试者 ID 取得上传所需数字用户 ID。普通手机号登录后 userInfo 未被统一回写，且 subjectId 为空，即使 JWT 已包含数字 sub 也会在请求前被客户端错误拦截。",
+  "current_risk_hypothesis": "数字用户 ID 必须只从标准 JWT 的非空正整数 sub 读取；账号作用域与上传请求绑定关系不得改变，首页异步返回也不得向已经切换的账号写入用户资料。",
+  "summary": "使报告上传可在普通账号刚登录、资料尚未加载时使用 JWT 身份正常发起。",
+  "root_cause": "上传身份解析没有使用后端已签发 JWT 中的数字用户 sub，并且首页获取的用户资料没有同步到共享认证状态。",
+  "risk_hypothesis": "新增 JWT 用户 ID 解析和资料回写只能补足身份，不得弱化账户作用域校验、接受非数字/非法 sub，或把旧账号资料写给新账号。",
   "impacted_domains": [
     "ios_ui_interaction",
-    "ios_health_client",
-    "ios_ui_interaction",
-    "ios_score_presentation",
+    "ios_auth_ui",
+    "ios_report_upload",
+    "ios_auth_state",
     "test_suite_integrity"
   ],
   "regression_contracts": [
+    "REPORT-UPLOAD-AUTH-IDENTITY-001",
     "UX-ACCESSIBILITY-001",
-    "XAGE-TRUSTED-SCORE-001",
     "TEST-SUITE-INTEGRITY-001"
   ],
   "same_class_scan": [
-    "扫描 XAgeScoreRing、XAgeScoreSummaryCard、XAgeTrustedScorePresentationPolicy 与现有 XAgeComponents DEBUG Preview，确认新宿主仅在 Canvas 内组合既有组件和局部数据。",
-    "扫描评分圆环详情回调和服务端可信评分策略，确认本次不更改评分生成、服务端版本化门槛、置信度刻度或圆环点击入口。"
+    "扫描 AuthManager.accountScope、JWT sub 解析与后端 create_access_token/get_current_user，确认服务端将用户 ID 作为 JWT sub，客户端只接受正整数 sub 作为报告 subject_user_id。",
+    "扫描 XAgeConversation 到 HealthReportCompletionViewModel 的上传调用，确认数字用户 ID 和 accountScope 均来自同一 AuthManager 会话，既有 account-bound 传输校验保持不变。",
+    "扫描 XAgeServerSync 的账号代际校验，确认仅在当前 scope 仍匹配时将 /api/users/me 结果写回 AuthManager.userInfo。"
   ],
   "tests_added_or_updated": [
-    "XjieTests/XAgeCompositeScoresTests.testScoreDashboardPreviewReflectsEditedScores（验证 Preview 编辑后的三项分数进入对应圆环输入，并限制到 0...100）"
+    "XjieTests/LoginViewModelTests.testAuthenticatedNumericUserIDUsesJWTSubjectBeforeProfileLoads（验证普通账号在 /api/users/me 尚未返回时，仍能从数字 JWT sub 获得报告上传所需的用户 ID）"
   ],
   "verification_plan": [
-    "运行 Preview focused 单元测试与 generic iOS Simulator Debug build，确认局部评分输入、数值限制和 SwiftUI 编译。",
-    "在 Xcode Canvas 打开“首页三评分调试”，分别调节三个 Stepper，确认圆环数字、进度、置信度刻度和说明卡实时更新，且不触发网络请求。",
+    "运行 LoginViewModelTests，确认 JWT 数字 sub 的身份解析及既有登录、注册校验仍通过。",
+    "在普通手机号登录后，不等待资料页刷新即上传报告，确认不再显示“当前登录信息不完整”，并由后续 account-bound 上传请求继续执行服务端鉴权。",
     "运行 JSON 解析、git diff --check 与 fast 门禁；不将其描述为后端、真机或 TestFlight 验证。"
   ],
   "manual_checks": [
-    "在 Canvas 中验证 0、低分、中分和 100 分时三个圆环的数字、弧线和底部开口可读。",
-    "验证 Stepper 可独立编辑压力、恢复、炎症，说明卡与圆环卡仍保持现有样式。"
+    "确认普通手机号登录、首次进入首页、立即上传报告三种时机均能取得一致的数字用户 ID；切换账号后旧账号资料不会保留。"
   ],
   "unresolved_risks": [
-    "自动化验证 Preview 的本地输入映射与范围，不能替代 Xcode Canvas 交互、真实设备上的动态字体和 VoiceOver 验收。",
-    "Preview 是 DEBUG 专用调试工具；当前生产可信评分策略和服务端版本化快照接入保持不变。"
+    "JWT 的 sub 仍由客户端解码用于本地路由参数；服务端必须继续在报告接口通过签名 token 和 subject_user_id 的主体授权校验防止越权，客户端解析不能替代服务端鉴权。",
+    "未使用真实生产账号上传文件验证服务端报告会话、网络、权限或 OCR 后处理。"
   ]
 }

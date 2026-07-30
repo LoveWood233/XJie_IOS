@@ -6,6 +6,10 @@ enum XAgeSupportComplianceContract {
     static let privacyPolicyEffectiveAt = "2026年7月26日"
     static let privacyPolicyVersion = "2026.07"
     static let privacyPolicyURL = URL(string: "https://www.jianjieaitech.com/privacy")!
+    /// 注册页与“更多 > 隐私政策”共用同一份正文，避免政策内容分叉。
+    static var privacyPolicySections: [XAgeComplianceSection] {
+        XAgeComplianceContent.privacySections
+    }
     static let supportEmail = "support@xjie-health.com"
     static let privacyPolicyRequiredTopics = [
         "适用范围与重要提示", "我们如何收集和使用信息", "敏感个人信息与单独同意",
@@ -26,7 +30,7 @@ enum XAgeSupportComplianceContract {
     }
 }
 
-private struct XAgeComplianceSection: Identifiable {
+struct XAgeComplianceSection: Identifiable {
     let title: String
     let content: String
 

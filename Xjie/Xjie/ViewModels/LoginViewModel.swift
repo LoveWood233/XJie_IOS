@@ -20,11 +20,17 @@ final class LoginViewModel: ObservableObject {
     @Published var onboardingGeneratePlan = true
     @Published var medicationNeeded = false
     @Published var isSignup = false
+    @Published var hasAcceptedUserAgreement = false
+    @Published var hasAcceptedPrivacyPolicy = false
     @Published var showAlert = false
     @Published var alertMessage = ""
     @Published var errorMessage: String?
 
     private let api: APIServiceProtocol
+
+    var hasAcceptedRequiredLegalAgreements: Bool {
+        hasAcceptedUserAgreement && hasAcceptedPrivacyPolicy
+    }
 
     init(api: APIServiceProtocol = APIService.shared) {
         self.api = api
@@ -70,6 +76,11 @@ final class LoginViewModel: ObservableObject {
         }
         if isSignup && normalizedUsername.isEmpty {
             alertMessage = "请填写用户名"; showAlert = true; return
+        }
+        if isSignup && !hasAcceptedRequiredLegalAgreements {
+            alertMessage = "请阅读并同意《用户协议》和《隐私政策》后再注册"
+            showAlert = true
+            return
         }
         let ageValue = Int(age)
         let heightValue = Double(heightCm)

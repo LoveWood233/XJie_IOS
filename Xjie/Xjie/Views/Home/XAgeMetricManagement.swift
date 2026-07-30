@@ -321,12 +321,12 @@ struct XAgeMetricCard: View {
                 Spacer(minLength: 0)
             }
 
-            Text(card.subtitle)
-                .font(.system(size: 12))
-                .foregroundStyle(card.isStale ? Color(hex: "9A6A28") : Color(hex: "5D7890"))
-                .lineSpacing(2)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+//            Text(card.subtitle)
+//                .font(.system(size: 12))
+//                .foregroundStyle(card.isStale ? Color(hex: "9A6A28") : Color(hex: "5D7890"))
+//                .lineSpacing(2)
+//                .lineLimit(2)
+//                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)

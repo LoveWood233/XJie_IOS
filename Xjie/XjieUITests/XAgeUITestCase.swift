@@ -32,12 +32,17 @@ class XAgeUITestCase: XCTestCase {
         launchRequiresNetworkAudit = true
     }
 
-    final func relaunchApplication(resetAuth: Bool, resetDataCards: Bool) {
+    final func relaunchApplication(
+        resetAuth: Bool,
+        resetDataCards: Bool,
+        debugAuthenticated: Bool = false
+    ) {
         auditCurrentApplicationLaunch()
         app.terminate()
         app = XAgeUITestApplicationFactory.make(
             resetAuth: resetAuth,
-            resetDataCards: resetDataCards
+            resetDataCards: resetDataCards,
+            debugAuthenticated: debugAuthenticated
         )
         launchApplication()
     }
@@ -88,7 +93,11 @@ class XAgeUITestCase: XCTestCase {
 }
 
 private enum XAgeUITestApplicationFactory {
-    static func make(resetAuth: Bool, resetDataCards: Bool) -> XCUIApplication {
+    static func make(
+        resetAuth: Bool,
+        resetDataCards: Bool,
+        debugAuthenticated: Bool = false
+    ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
             "XJIE_UI_TEST_STUB_NETWORK",
@@ -101,6 +110,12 @@ private enum XAgeUITestApplicationFactory {
         }
         if resetDataCards {
             app.launchArguments.append("XJIE_UI_TEST_RESET_DATA_CARDS")
+        }
+        if debugAuthenticated {
+            app.launchArguments += [
+                "XJIE_DEBUG_ACCESS_TOKEN", "ui-validation-token",
+                "XJIE_DEBUG_SUBJECT_ID", "UI-VALIDATION"
+            ]
         }
         return app
     }

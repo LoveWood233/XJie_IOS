@@ -569,6 +569,9 @@ extension AuthManager {
            let value = Int(raw) {
             return value
         }
+        if let value = Self.numericUserID(fromJWT: token) {
+            return value
+        }
         if let value = Int(subjectId.trimmingCharacters(in: .whitespacesAndNewlines)) {
             return value
         }

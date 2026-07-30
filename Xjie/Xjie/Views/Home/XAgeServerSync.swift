@@ -94,6 +94,10 @@ final class XAgeServerSyncViewModel: ObservableObject {
             currentScope: auth.accountScope
         ) else { return }
 
+        // 将已验证的当前账号资料回写到认证状态。除报告上传外，其他依赖当前
+        // 用户身份的功能也不应只依赖某个页面自身的临时请求结果。
+        auth.userInfo = user
+
         let watchedNames = watched?.items.map(\.indicator_name) ?? []
         let indicatorItems = indicators?.indicators ?? []
         let trendNames = Self.trendRequestNames(watchedNames: watchedNames)

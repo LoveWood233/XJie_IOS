@@ -167,6 +167,20 @@ final class AuthManager: ObservableObject {
     /// 从 JWT 安全提取账号 `sub`，并返回不可逆的本地存储作用域。
     /// 无效、缺少 `sub` 或不是标准三段 JWT 时返回 nil，绝不退化为 token 明文。
     nonisolated static func accountScope(fromJWT token: String) -> String? {
+        guard let normalized = jwtSubject(from: token) else { return nil }
+        return opaqueAccountScope(for: normalized)
+    }
+
+    /// 后端 access token 的 `sub` 是当前用户的数字 ID。报告上传等需要
+    /// subject_user_id 的流程可直接使用该已登录凭据，避免依赖异步资料加载。
+    nonisolated static func numericUserID(fromJWT token: String) -> Int? {
+        guard let subject = jwtSubject(from: token), let userID = Int(subject), userID > 0 else {
+            return nil
+        }
+        return userID
+    }
+
+    nonisolated private static func jwtSubject(from token: String) -> String? {
         let parts = token.split(separator: ".", omittingEmptySubsequences: false)
         guard parts.count == 3,
               let payloadData = decodeBase64URL(String(parts[1])),
@@ -176,7 +190,7 @@ final class AuthManager: ObservableObject {
         }
         let normalized = subject.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return nil }
-        return opaqueAccountScope(for: normalized)
+        return normalized
     }
 
     nonisolated private static func decodeBase64URL(_ encoded: String) -> Data? {

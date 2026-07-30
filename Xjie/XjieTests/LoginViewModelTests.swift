@@ -103,6 +103,8 @@ final class LoginViewModelTests: XCTestCase {
         vm.username = "新用户"
         vm.password = "password123"
         vm.isSignup = true
+        vm.hasAcceptedUserAgreement = true
+        vm.hasAcceptedPrivacyPolicy = true
         vm.onboardingGeneratePlan = false
 
         await vm.loginPhone(authManager: auth)
@@ -111,6 +113,24 @@ final class LoginViewModelTests: XCTestCase {
         XCTAssertTrue(paths.contains("/api/auth/signup"))
         XCTAssertFalse(paths.contains("/api/users/consent"), "注册后的授权必须由用户明确确认")
         auth.logout()
+    }
+
+    func testSignupWithoutLegalAgreementsDoesNotSendSignupRequest() async {
+        let mock = MockAPIService()
+        let vm = LoginViewModel(api: mock)
+        let auth = AuthManager.makeTestingInstance()
+
+        vm.phone = "13800138001"
+        vm.username = "新用户"
+        vm.password = "password123"
+        vm.isSignup = true
+
+        await vm.loginPhone(authManager: auth)
+
+        XCTAssertTrue(vm.showAlert)
+        XCTAssertEqual(vm.alertMessage, "请阅读并同意《用户协议》和《隐私政策》后再注册")
+        let paths = await mock.requestedPaths
+        XCTAssertFalse(paths.contains("/api/auth/signup"))
     }
 
     func testLoginPhoneNormalizesWhitespaceBeforeSubmitting() async throws {
@@ -319,6 +339,15 @@ final class LoginViewModelTests: XCTestCase {
         XCTAssertNotEqual(first, second)
         XCTAssertNil(AuthManager.accountScope(fromJWT: "not-a-jwt"))
         XCTAssertNil(AuthManager.accountScope(fromJWT: try makeJWT(subject: "   ", nonce: "1")))
+    }
+
+    func testAuthenticatedNumericUserIDUsesJWTSubjectBeforeProfileLoads() throws {
+        let auth = AuthManager.makeTestingInstance()
+        auth.setAuth(accessToken: try makeJWT(subject: "42", nonce: "login"))
+
+        XCTAssertNil(auth.userInfo, "此用例模拟刚登录、/api/users/me 尚未返回的时机")
+        XCTAssertEqual(auth.authenticatedNumericUserID, 42)
+        XCTAssertEqual(AuthManager.numericUserID(fromJWT: auth.token), 42)
     }
 
     func testUIValidationSessionUsesStableOpaqueAccountScope() {

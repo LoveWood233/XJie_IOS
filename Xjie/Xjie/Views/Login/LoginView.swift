@@ -10,14 +10,45 @@ private enum LoginFocusField: Hashable {
     case password
 }
 
+private enum SignupLegalDocument: String, Identifiable {
+    case userAgreement
+    case privacyPolicy
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .userAgreement: "用户协议"
+        case .privacyPolicy: "隐私政策"
+        }
+    }
+}
+
 /// 登录页面 — 对应小程序 pages/login/login
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
-    @StateObject private var vm = LoginViewModel()
+    @StateObject private var vm: LoginViewModel
+    /// Canvas 预览会关闭受试者目录加载，避免在 Xcode 中访问真实后端。
+    private let loadsSubjects: Bool
     @State private var showReset = false
+    @State private var showLegalConsentConfirmation = false
+    @State private var presentedLegalDocument: SignupLegalDocument?
     @State private var isSubmittingCredentials = false
     @State private var isSubmittingSubject = false
     @FocusState private var focusedField: LoginFocusField?
+
+    init() {
+        loadsSubjects = true
+        _vm = StateObject(wrappedValue: LoginViewModel())
+    }
+
+    #if DEBUG
+    /// Canvas 专用入口：保留完整登录布局与本地输入交互，但不加载远程受试者目录。
+    init(previewMode: Bool) {
+        loadsSubjects = !previewMode
+        _vm = StateObject(wrappedValue: LoginViewModel())
+    }
+    #endif
 
     var body: some View {
         ScrollView {
@@ -25,13 +56,13 @@ struct LoginView: View {
                 // Logo 区域
                 logoArea
 
-                #if DEBUG
-                debugValidationEntry
-                #endif
+                // Debug UI 验证改由 UI 自动化启动参数触发，登录页不再展示入口。
+                // #if DEBUG
+                // debugValidationEntry
+                // #endif
 
-                // 受试者 ID 登录（科研内测专用）
-                // 注: iOS 版仅支持受试者 ID 与邮箱两种登录方式
-                modeSwitch
+                // 受试者 ID 登录（科研内测专用）入口暂时停用。
+                // modeSwitch
 
                 if vm.mode == .subject {
                     subjectSection
@@ -54,14 +85,30 @@ struct LoginView: View {
                 Button("完成") { dismissKeyboard() }
             }
         }
-        .task { await vm.loadSubjects() }
+        .task {
+            guard loadsSubjects else { return }
+            await vm.loadSubjects()
+        }
         .alert("提示", isPresented: $vm.showAlert) {
             Button("确定", role: .cancel) {}
         } message: {
             Text(vm.alertMessage)
         }
+        .alert("请先阅读并同意协议", isPresented: $showLegalConsentConfirmation) {
+            Button("暂不注册", role: .cancel) {}
+            Button("确认同意并注册") {
+                vm.hasAcceptedUserAgreement = true
+                vm.hasAcceptedPrivacyPolicy = true
+                submitCredentials()
+            }
+        } message: {
+            Text("注册前请阅读《用户协议》和《隐私政策》。点击“确认同意并注册”即表示你已阅读并同意两份协议。")
+        }
         .sheet(isPresented: $showReset) {
             PasswordResetSheet()
+        }
+        .sheet(item: $presentedLegalDocument) { document in
+            SignupLegalDocumentView(document: document)
         }
     }
 
@@ -235,7 +282,9 @@ struct LoginView: View {
             }
 
             if vm.isSignup {
-                onboardingNeedsSection
+                // 健康需求暂不在注册页收集，保留组件与既有注册后处理逻辑以便后续恢复。
+                // onboardingNeedsSection
+                legalConsentSection
             }
 
             Button {
@@ -282,33 +331,45 @@ struct LoginView: View {
     private var signupProfileSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("基本数据").font(.subheadline.bold()).foregroundColor(.appText)
+            Text("性别").font(.caption).foregroundColor(.appMuted)
             Picker("性别", selection: $vm.sex) {
                 Text("女").tag("female")
                 Text("男").tag("male")
                 Text("其他").tag("other")
             }
             .pickerStyle(.segmented)
-            HStack(spacing: 8) {
-                TextField("年龄", text: $vm.age)
-                    .keyboardType(.numberPad)
-                    .focused($focusedField, equals: .age)
-                    .submitLabel(.next)
-                    .onSubmit { moveFocus(by: 1) }
-                    .accessibilityIdentifier("login.age")
-                TextField("身高 cm", text: $vm.heightCm)
-                    .keyboardType(.decimalPad)
-                    .focused($focusedField, equals: .height)
-                    .submitLabel(.next)
-                    .onSubmit { moveFocus(by: 1) }
-                    .accessibilityIdentifier("login.height")
-                TextField("体重 kg", text: $vm.weightKg)
-                    .keyboardType(.decimalPad)
-                    .focused($focusedField, equals: .weight)
-                    .submitLabel(.next)
-                    .onSubmit { moveFocus(by: 1) }
-                    .accessibilityIdentifier("login.weight")
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("年龄（岁）").font(.caption).foregroundColor(.appMuted)
+                    TextField("请输入年龄", text: $vm.age)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                        .focused($focusedField, equals: .age)
+                        .submitLabel(.next)
+                        .onSubmit { moveFocus(by: 1) }
+                        .accessibilityIdentifier("login.age")
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("身高（cm）").font(.caption).foregroundColor(.appMuted)
+                    TextField("请输入身高", text: $vm.heightCm)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.decimalPad)
+                        .focused($focusedField, equals: .height)
+                        .submitLabel(.next)
+                        .onSubmit { moveFocus(by: 1) }
+                        .accessibilityIdentifier("login.height")
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("体重（kg）").font(.caption).foregroundColor(.appMuted)
+                    TextField("请输入体重", text: $vm.weightKg)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.decimalPad)
+                        .focused($focusedField, equals: .weight)
+                        .submitLabel(.next)
+                        .onSubmit { moveFocus(by: 1) }
+                        .accessibilityIdentifier("login.weight")
+                }
             }
-            .textFieldStyle(.roundedBorder)
         }
     }
 
@@ -344,6 +405,62 @@ struct LoginView: View {
         .padding(12)
         .background(Color.appCardBg)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var legalConsentSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            legalConsentRow(
+                accepted: $vm.hasAcceptedUserAgreement,
+                document: .userAgreement,
+                identifier: "login.legal.userAgreement"
+            )
+            legalConsentRow(
+                accepted: $vm.hasAcceptedPrivacyPolicy,
+                document: .privacyPolicy,
+                identifier: "login.legal.privacyPolicy"
+            )
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("login.legal.consents")
+    }
+
+    private func legalConsentRow(
+        accepted: Binding<Bool>,
+        document: SignupLegalDocument,
+        identifier: String
+    ) -> some View {
+        HStack(alignment: .center, spacing: 6) {
+            Button {
+                accepted.wrappedValue.toggle()
+            } label: {
+                Image(systemName: accepted.wrappedValue ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 19, weight: .medium))
+                    .foregroundStyle(accepted.wrappedValue ? Color.appPrimary : Color.appMuted)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("同意\(document.title)")
+            .accessibilityValue(accepted.wrappedValue ? "已同意" : "未同意")
+            .accessibilityIdentifier(identifier)
+
+            Text("我已阅读并同意")
+                .font(.caption)
+                .foregroundStyle(Color.appMuted)
+
+            Button {
+                dismissKeyboard()
+                presentedLegalDocument = document
+            } label: {
+                Text("《\(document.title)》")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.appPrimary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("\(identifier).document")
+
+            Spacer(minLength: 0)
+        }
     }
 
     private func onboardingChip(_ key: String, _ label: String) -> some View {
@@ -425,12 +542,73 @@ struct LoginView: View {
 
     private func submitCredentials() {
         guard !vm.loading, !isSubmittingCredentials else { return }
+        if vm.isSignup && !vm.hasAcceptedRequiredLegalAgreements {
+            dismissKeyboard()
+            showLegalConsentConfirmation = true
+            return
+        }
         isSubmittingCredentials = true
         dismissKeyboard()
         Task {
             await vm.loginPhone(authManager: authManager)
             isSubmittingCredentials = false
         }
+    }
+}
+
+private struct SignupLegalDocumentView: View {
+    let document: SignupLegalDocument
+    @Environment(\.dismiss) private var dismiss
+
+    private var sections: [(title: String, content: String)] {
+        switch document {
+        case .userAgreement:
+            [
+                ("服务说明", "“小捷”提供健康档案、健康数据记录、趋势展示、提醒和健康管理相关服务。应用中的健康管理内容仅供参考，不构成诊断、处方、治疗建议或紧急医疗服务。"),
+                ("账号与使用", "请使用真实、合法的信息注册并妥善保管账号和密码。不得利用本服务发布违法、有害或侵犯他人权益的内容，也不得干扰服务的正常运行。"),
+                ("健康信息与服务边界", "你应自行判断录入、上传和同步的信息是否准确、完整。出现紧急症状、身体明显不适或需要诊疗时，请及时联系医疗机构或当地急救服务。"),
+                ("服务变更与终止", "我们可能基于服务运营、安全或法律要求更新功能或协议，并通过应用内合理方式告知。你可随时停止使用服务、退出登录或按页面指引申请注销账号。"),
+                ("联系我们", "如对本协议、账号或服务有疑问，可通过应用内意见反馈或 support@xjie-health.com 联系我们。")
+            ]
+        case .privacyPolicy:
+            XAgeSupportComplianceContract.privacyPolicySections.map {
+                (title: $0.title, content: $0.content)
+            }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("请在注册前仔细阅读")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.appMuted)
+
+                    ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(section.title)
+                                .font(.headline)
+                                .foregroundStyle(Color.appText)
+                            Text(section.content)
+                                .font(.subheadline)
+                                .foregroundStyle(Color.appMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(20)
+            }
+            .background(Color.appBackground)
+            .navigationTitle(document.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+        }
+        .accessibilityIdentifier("login.legal.document.\(document.id)")
     }
 }
 
@@ -558,3 +736,19 @@ struct PasswordRevealField: View {
         }
     }
 }
+
+#if DEBUG
+/// 登录页 Canvas 宿主：认证状态与页面数据均为本地实例，不读取真实登录态。
+private struct LoginPreviewHost: View {
+    @StateObject private var authManager = AuthManager.makeTestingInstance()
+
+    var body: some View {
+        LoginView(previewMode: true)
+            .environmentObject(authManager)
+    }
+}
+
+#Preview("登录页") {
+    LoginPreviewHost()
+}
+#endif
