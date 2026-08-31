@@ -2,7 +2,18 @@
 
 > 项目：Xjie iOS App (SwiftUI)  
 > 起始日期：2026-03-24  
-> 当前状态：内部 TestFlight `1.0(20)` 已于 2026-07-30 14:46:09（Asia/Shanghai）从 `main@847a661947bad71939e94e784dc09180c5e3074a` 通过 Xcode cloud-managed `destination=upload` 成功上传并进入 Apple processing；build 20 已占用，下一候选必须 `>=21`。测试员可见性及真实 HealthKit、输入法、无障碍和 AI/报告内容仍待 TestFlight 测试，不把上传成功称为最终验收。
+> 当前状态：内部 TestFlight `1.0(22)` 已于 2026-08-04 16:28:53（Asia/Shanghai）从 `main@160f0420ba2bfb038e2164255aef31e2d6f6fe5b` 通过 Xcode cloud-managed `destination=upload` 成功上传并进入 Apple processing；build 22 已占用，下一候选必须 `>=23`。生产后端本轮未部署，测试员可见性及真实 HealthKit、输入法、无障碍和 AI/报告内容仍待 TestFlight 测试，不把上传成功称为最终验收。
+
+---
+
+## 2026-08-04 — TestFlight 1.0(22) 报告修复内部上传
+
+- 报告原件本机持久化、用户报告详情、HEIC/HEIF 真实类型识别、OCR 有界恢复、评分终态和数据页惰性导航修复已提交并直接推送为 canonical `main@160f0420ba2bfb038e2164255aef31e2d6f6fe5b`，tree 为 `98df51e963fadb7b886ef78d14a58252a603a6a3`；Android 未修改、构建或发布。
+- 上传前严格 `impacted --strict` 从头通过：backend `395 = 392 passed + 3 fixed skips`、tools `83/83`、iOS Unit `237/237`、full UI `10/10`、small UI `2/2`、设备 Release Archive/bundle 和最终 diff 检查。命名报告 UI 验证本地原件、候选定位、字段确认、整份确认和待评分状态；确定性 UI 网络审计零逃逸。
+- 同一远端提交生成 `Xjie-TestFlight-1.0-22.xcarchive`；包体核验通过 `1.0(22)`、arm64 iOS device、生产 API、codesign、HealthKit/background-delivery 和 marker-free。上传前 archive `Info.plist` SHA-256 为 `d73b874af55ce4e41f2983445eea55e92072d69f58cb98d0a77c7312325188ad`。
+- Apple 于 `2026-08-04T16:28:53+08:00` 返回 `Uploaded package is processing`、`Upload succeeded`、`Uploaded Xjie`、`EXPORT SUCCEEDED`；Distribution receipt 为 success、0 error、0 warning，content-delivery build id 为 `efc9ab9f-fbab-4c9b-9896-cf8a317dd544`。注入回执后的 archive `Info.plist` SHA-256 为 `f68ba8e1a6d2e8b4fb6efae87be069db2989d07ddc15f37d57a47ce404fd7434`。
+- build 22 已占用，下一候选至少为 23。Xcode direct upload 没有保留可独立检查的最终 distribution IPA，因此 `external_promotion_allowed=false`，处理完成、测试员可见/可安装和五项真机签核仍待确认。
+- 生产只读预检发现服务器没有完整受信七文件部署 bundle、非交互 root 权限、报告加密对象存储、Celery worker/beat 和迁移 `0026` 条件，本轮未冒险部署。Build 22 可修复客户端本地原件体验，但线上 LLM/OCR 完成仍依赖后端按同 revision 安全部署。
 
 ---
 
@@ -1465,3 +1476,29 @@ Xjie/
 - Xcode `26.3 (17C529)` 使用 cloud-managed `destination=upload`。Apple 于 `2026-07-30T23:14:04+08:00` 返回 `Uploaded package is processing`、`Upload succeeded`、`Uploaded Xjie`、`EXPORT SUCCEEDED`；最终 content-delivery build id 为 `a1293a3d-afb8-4b92-a61f-1fb4cbba99ba`，状态 `PROCESSING`。
 - `latest_uploaded_build` 已单调推进为 `21`，下一构建至少为 `22`。当前只声明内部上传成功并进入 processing；Apple 处理完成、测试员可见/可安装和五项 TestFlight 真机/受控签核仍待确认。
 - direct Xcode 上传没有保留可独立核验的最终 distribution IPA，因此不声明 IPA SHA-256 或 distribution CDHash，`external_promotion_allowed=false`。本次没有部署生产后端、数据库迁移、真实 S3 或 OCR/LLM provider，上传成功不能证明生产报告解析链路可用。
+
+---
+
+## 2026-07-31 — iOS 数据页 lazy navigation 修复（本地验证，未交付）
+
+- 历史 build 21 Unit action log 共记录 12 条 SwiftUI `Invalid Configuration`：`XAgeMetricManagerPage` 与 `XAgeWeightRecordFlowView` 各 6 条。根因不是页面按钮本身，而是 `XAgeDataDashboardView` 位于 page-style `TabView` 的惰性子树，却在子页修饰链注册两个 `navigationDestination`；SwiftUI 已明确说明这些目标未来可能被忽略。
+- 两项目标现改为类型化 `XAgeDataNavigationRoute`，由 `XAgeMainView` 常驻根 `NavigationStack` 唯一注册；数据页只发送路由。`XAgeMainView` 是账号 configure 的唯一 owner，route/sheet presentation 均携带账号 generation；账号变化先推进 generation，再清空旧 route、sheet 和实时值并载入新偏好。任何跨 `await` 或延迟到达的旧账号回调必须复核 generation，不得关闭或污染新账号 UI。
+- 同类扫描覆盖生产 Swift 的 6 个 `navigationDestination`、顶部管理请求、快捷栏 data-manager/weight、指标详情、身高/体重 sheet、返回、重复进入及数据/问答/X年龄分页往返；其余 4 个目标位于稳定根或非惰性容器，没有用嵌套导航栈、隐藏链接或坐标点击绕过。
+- 静态结构回归要求 Dashboard 不得再出现 `.navigationDestination(` 且根页面必须绑定 generation-aware 协调器路由。账号路由 Unit `/tmp/xjie-data-navigation-generation-unit-20260731.xcresult` 为 `1/1`，tracked validator exact 通过，xcresult action log 警告为 `0`；分页往返 UI `/tmp/xjie-data-navigation-generation-ui-20260731.xcresult` 为 `1/1`，tracked validator exact 通过，xcodebuild log 与 xcresult action log 中 `navigationDestination`、`lazy container` 和 `Invalid Configuration` 的匹配数均为 `0`。UI console log 不可用，未将其写成已检查。
+- 最终 regression guard validate、默认轻量 `/usr/bin/python3 -I tools/run_regression_gate.py fast`、默认轻量 `impacted` 与 `git diff --check` 均通过；未执行 strict/full、设备 Archive 或真机验证。修复前旧通用 UI 基线 `/tmp/xjie-nav-lazy-red-20260731.xcresult` 为 `1/2`，唯一失败位于无关的快捷功能拖拽重排步骤，作为独立风险保留。
+- P2 仍包括：根视图三个独立 sheet modifier 尚无统一仲裁，外部文件导入和数据 sheet 并发时可能竞争；就医助手动态资料行、健康画像长期用药和健康计划三条合法行级 `NavigationLink` 缺专门点击/返回 UI 覆盖；Simulator 不证明真机能力。
+- 本轮只改 iOS；修复后来并入 `main@160f0420ba2bfb038e2164255aef31e2d6f6fe5b` 并随 TestFlight `1.0(22)` 上传。Android 未修改，生产后端仍未部署，下一构建至少为 `23`。
+
+## 2026-08-01 — 健康报告本机原件、HEIC 识别与 OCR 终态修复（本地验证，未交付）
+
+- 生产只读核验确认截图对应 workflow #5 / asset #10 只完成 metadata 与 seal，之后从未被 OCR claim：现网只有 API，没有 Celery worker/beat；对象存储不可读，候选、事件、Observation 和评分任务均不存在，所以该报告从未经过 LLM，也没有解析结果入库。
+- 现场原件虽然名为 `.png` 且上传 MIME 为 PNG，真实容器却是 HEIC/HEIF；同时现网视觉模型是纯文本 `moonshot-v1-8k`。后端现以真实文件签名判断类型，逐字节保留原件和摘要，另生成方向已校正的 PNG 处理副本；API startup 对端点家族和图片模型能力失败关闭，worker 的实际 provider 构造发生在持久 claim 内，失败走独立有界基础设施预算且不消费内容重试，Kimi 专属参数不会发往 OpenAI。
+- iOS 新增 Application Support 本机原件仓库。相机、相册、文件、聊天附件和系统打开入口统一在发网前原子保存精确字节，按账号 scope 与数字 subject 隔离、禁用备份、应用文件保护并复核大小/SHA；seal 后用可恢复 journal 绑定 workflow。最新、历史和解读页优先打开本机单页，Release 不再展示 workflow、asset、SHA、候选或 Observation 技术追踪。
+- 服务器对象仅作为远程 OCR 的临时副本。只有客户端对账号、主体、workflow、请求版本、页数与聚合摘要提供本机绑定 ACK，且每页真实字节重新校验后，终态报告的服务器字节才可退休；通用上传重放、缺失 ACK、冲突 ACK 和同大小篡改均不能旁路。
+- 后端补齐 seal 直接唤醒与 beat sweep、存储失败落库、陈旧 lease 对账、耗尽终态、清理队列和评分 partial/unavailable 终态。生产 compose 增加 worker/beat 角色，专用报告对象存储在生产配置缺失时失败关闭。
+- 证据：iOS 报告套件 `/tmp/xjie-health-report-full-review-20260801.xcresult` 精确 `39/39`；同大小篡改聚焦 `/tmp/xjie-report-tamper-focused-20260801a.xcresult` `1/1`；backend_health JUnit `/tmp/xjie-backend-health-review-20260801.xml` 精确 `144/144`、SHA-256 `77ef1363c67cbec2c31c9211ea710b214555116cddcbba6b90eae77e97a23aab`。linux/amd64 镜像、pip check、现场 HEIC 禁网只读解码/源摘要不变，以及合成非医疗 HEIC 的真实 `kimi-k2.5` 结构 smoke 均通过；Ruff、compose config、regression guard、fast 和 diff check 通过。
+- 同类状态扫描把报告首页收敛为共享状态机：首次读取失败不再与“暂无健康报告”同时出现，`awaiting_confirmation` 显示“识别完成 · 待确认”，`committing` 显示“确认完成 · 入库中”。首次 strict 的唯一 UI 红灯来自旧二态断言；失败 xcresult 的可访问性层级证明产品已显示新文案，更新测试后当前产品树的端到端报告 UI `/tmp/xjie-report-ui-focused-final-20260801.xcresult` 为 `1/1`。
+- 终审继续发现并修复三个同类缺口：未领取的 OCR pending 没有 deadline；provider 在 claim 前构造时异常绕过写回；`report_ocr_stalled` 虽提示重传却不在精确恢复 allowlist。新建和恢复 workflow 现在持久保存 30 分钟 pending deadline，读取与 sweep 共用 reconciler；provider 初始化在 claim 内独立最多重试五次；stalled/provider/storage/retry-exhausted 的用户恢复策略与精确同字节重传共用一个注册表，重传后重新绑定原 workflow 并再次唤醒 OCR。
+- Release 解读页与上传弹窗改为消费共享白名单展示模型；fact key、原始 JSON/对象/数组、evidence、missing inputs、未知方向/状态和 failure code 只留在 Debug 或收敛为用户兜底。旧实现红测 `/tmp/xjie-report-interpretation-release-red2-20260801.xcresult` 命中六条泄露路径；最终 focused `/tmp/xjie-report-interpretation-failure-presentation-20260801.xcresult` `1/1`、Release build `/tmp/xjie-report-interpretation-release-build2-20260801.xcresult` 成功。
+- 当前产品树的 `HealthReportCompletionTests` `/tmp/xjie-health-report-completion-final3-20260801.xcresult` 为 `40/40`；后端 `/tmp/xjie-backend-full-final2-20260801.xml` 精确 `395/395`（392 passed + 3 固定 integration skips），相邻报告测试 `73/73`；tools 精确门禁为 `83/83`。最终 `/usr/bin/python3 -I tools/run_regression_gate.py impacted --strict` exit `0`：Unit `/tmp/xjie-quality-unit.xcresult` 精确 `237/237`、full UI `/tmp/xjie-quality-ui.xcresult` 精确 `10/10`、small UI `/tmp/xjie-quality-ui-small.xcresult` 精确 `2/2`，并通过设备 Release Archive `/tmp/xjie-quality-release.xcarchive`、bundle 与最终 diff 检查；输出 `IMPACTED REGRESSION GATE: PASSED; NOT RELEASE EVIDENCE`。
+- 客户端与后端代码已提交并 push，iOS 客户端已随 TestFlight `1.0(22)` 上传；生产仍未部署。现网旧 workflow #5 的服务器字节已不可读，build 21 又从未在本机保存原件，数据库 SHA 无法恢复文件；用户安装新客户端后仍须重新选择同一原件一次。生产部署必须同时验证 API、worker、beat、Redis、加密对象存储、迁移和视觉 provider，不能把 TestFlight 上传或合成 smoke 说成线上已恢复。
