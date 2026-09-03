@@ -230,6 +230,12 @@ def test_profile_revision_history_is_subject_scoped_append_only_and_ordered(fact
 
 def test_profile_device_measurement_and_manual_edit_preserve_sources_and_conflict(factory):
     with factory() as db:
+        executed_statements: list[str] = []
+
+        @event.listens_for(db.get_bind(), "before_cursor_execute")
+        def _capture_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+            executed_statements.append(statement)
+
         upsert_manual_fact(
             db,
             user_id=1,
@@ -301,12 +307,22 @@ def test_profile_device_measurement_and_manual_edit_preserve_sources_and_conflic
         current_fact = db.scalar(select(HealthProfileFact))
         assert current_fact.value_data["value"] == {"weight_kg": 71}
         assert current_candidate.conflict_with_fact_id == current_fact.id
+        assert not any(
+            "SELECT DISTINCT health_profile_candidates" in statement
+            for statement in executed_statements
+        )
 
 
 def test_unconfirmed_or_conflicting_device_observation_never_reaches_any_ai_consumer(
     factory,
 ):
     with factory() as db:
+        executed_statements: list[str] = []
+
+        @event.listens_for(db.get_bind(), "before_cursor_execute")
+        def _capture_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+            executed_statements.append(statement)
+
         upsert_manual_fact(
             db,
             user_id=1,
@@ -364,6 +380,10 @@ def test_unconfirmed_or_conflicting_device_observation_never_reaches_any_ai_cons
             db, user_id=1, consumer="chat_question"
         )["device_observations"]
         assert [item["observation_id"] for item in admitted] == [observation.id]
+        assert not any(
+            "SELECT DISTINCT trusted_device_profile_observations" in statement
+            for statement in executed_statements
+        )
 
 
 def test_device_source_content_reversion_creates_new_active_version(factory):

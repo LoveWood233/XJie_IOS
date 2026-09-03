@@ -1424,8 +1424,7 @@ def _supersede_device_candidates(
                 HealthProfileCandidate.review_status.in_(["pending_review", "conflict"]),
                 HealthProfileDeviceSourceLink.device_observation_id.in_(observation_ids),
             )
-            .distinct()
-        ).scalars().all()
+        ).scalars().unique().all()
     )
     for candidate in candidates:
         before = _candidate_snapshot(candidate)
@@ -1674,8 +1673,7 @@ def _reconcile_device_candidates_after_manual_fact(
                 HealthProfileCandidate.review_status.in_(["pending_review", "conflict"]),
                 HealthProfileSource.source_type == "device",
             )
-            .distinct()
-        ).scalars().all()
+        ).scalars().unique().all()
     )
     for candidate in candidates:
         if candidate.review_status == "conflict" and candidate.conflict_with_fact_id == fact.id:
@@ -1872,8 +1870,7 @@ def refresh_candidates_after_observation_retraction(
                 HealthProfileCandidate.review_status.in_(["pending_review", "conflict"]),
                 HealthProfileSource.source_observation_id.in_(observation_ids),
             )
-            .distinct()
-        ).scalars().all()
+        ).scalars().unique().all()
     )
     for candidate in candidates:
         before = _candidate_snapshot(candidate)

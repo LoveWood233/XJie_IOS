@@ -260,7 +260,7 @@ def signup(payload: SignupRequest, request: Request, db: Session = Depends(get_d
     db.commit()
     db.refresh(user)
 
-    logger.info("New user signed up: %s", user.phone)
+    logger.info("New user signed up: user_id=%s", user.id)
     log_activity(db, user.id, "signup", {"phone": user.phone},
                  ip_address=request.client.host if request.client else None,
                  user_agent=request.headers.get("user-agent"))
@@ -277,7 +277,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     if user is None or not verify_password(payload.password, user.password):
         raise HTTPException(status_code=401, detail="手机号或密码错误")
 
-    logger.info("User logged in: %s", user.phone)
+    logger.info("User logged in: user_id=%s", user.id)
     log_activity(db, user.id, "login", {"phone": user.phone},
                  ip_address=request.client.host if request.client else None,
                  user_agent=request.headers.get("user-agent"))
@@ -459,6 +459,10 @@ def password_reset_request(
     开发模式：验证码会打印到后端日志（[DEV-CODE]）。
     """
     phone = _require_phone(_normalize_phone(payload.phone))
+    if not settings.allows_insecure_development_features():
+        # No production SMS provider is configured yet. Never pretend delivery
+        # succeeded or leak the authentication factor through server logs.
+        raise HTTPException(status_code=503, detail="验证码服务暂不可用")
 
     now_ts = time()
     history = [t for t in _reset_request_window[phone] if now_ts - t < 600]
@@ -484,7 +488,7 @@ def password_reset_request(
         db.commit()
         logger.warning("[DEV-CODE] password reset phone=%s code=%s (expires 10min)", phone, code)
     else:
-        logger.info("password reset requested for unknown phone=%s", phone)
+        logger.info("password reset requested for unknown account")
     return {"ok": True, "message": "如该手机号已注册，验证码已发送（开发期请查看后端日志）"}
 
 
@@ -521,5 +525,5 @@ def password_reset_confirm(
     user.password = hash_password(payload.new_password)
     row.used = 1
     db.commit()
-    logger.info("password reset confirmed for phone=%s user_id=%s", phone, user.id)
+    logger.info("password reset confirmed for user_id=%s", user.id)
     return {"ok": True}

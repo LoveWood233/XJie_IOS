@@ -60,6 +60,11 @@ def _client(
     monkeypatch.setattr(health_data.settings, "APP_ENV", "test")
     monkeypatch.setattr(
         health_data.settings,
+        "JWT_SECRET",
+        "unit-test-signing-secret-at-least-32-bytes",
+    )
+    monkeypatch.setattr(
+        health_data.settings,
         "DIETARY_IMAGE_STORAGE_BACKEND",
         "local",
     )
@@ -502,6 +507,12 @@ def test_report_withdrawal_supersedes_unaccepted_profile_candidate(
     tmp_path,
 ):
     client, factory, headers = _client(monkeypatch, tmp_path)
+    executed_statements: list[str] = []
+
+    @event.listens_for(factory.kw["bind"], "before_cursor_execute")
+    def _capture_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+        executed_statements.append(statement)
+
     _admit_abnormal_report(client, headers, value=450, suffix="withdraw-one")
     second_workflow_id = _admit_abnormal_report(
         client,
@@ -536,6 +547,10 @@ def test_report_withdrawal_supersedes_unaccepted_profile_candidate(
         assert stored_candidate.review_status == "superseded"
         assert db.scalar(select(func.count()).select_from(HealthProfileFact)) == 0
         assert _get_patient_history_context(db, "1") == {}
+    assert not any(
+        "SELECT DISTINCT health_profile_candidates" in statement
+        for statement in executed_statements
+    )
 
 
 def test_legacy_profile_import_requires_user_verification_and_is_idempotent(

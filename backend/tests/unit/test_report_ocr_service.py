@@ -1590,6 +1590,46 @@ def test_report_vision_configuration_keeps_reviewed_openai_image_endpoint():
     assert defaults.report_vision_provider_family() == "moonshot"
 
 
+def test_auth_security_configuration_requires_explicit_local_opt_in_and_strong_production_key():
+    insecure_production = Settings(
+        _env_file=None,
+        APP_ENV="production",
+        JWT_SECRET="short-production-key",
+    )
+    with pytest.raises(RuntimeError, match="JWT_SECRET"):
+        insecure_production.validate_auth_security_configuration()
+
+    implicit_development = Settings(
+        _env_file=None,
+        APP_ENV="dev",
+        JWT_SECRET="change_me",
+    )
+    with pytest.raises(RuntimeError, match="JWT_SECRET"):
+        implicit_development.validate_auth_security_configuration()
+
+    explicit_local_development = implicit_development.model_copy(
+        update={"ALLOW_INSECURE_DEVELOPMENT": True}
+    )
+    explicit_local_development.validate_auth_security_configuration()
+
+    secure_production = insecure_production.model_copy(
+        update={"JWT_SECRET": "s" * 32}
+    )
+    secure_production.validate_auth_security_configuration()
+
+
+def test_fastapi_startup_rejects_weak_auth_configuration(monkeypatch):
+    from app import main as app_main
+
+    monkeypatch.setattr(app_main.settings, "APP_ENV", "production")
+    monkeypatch.setattr(app_main.settings, "ALLOW_INSECURE_DEVELOPMENT", False)
+    monkeypatch.setattr(app_main.settings, "JWT_SECRET", "short-production-key")
+
+    startup = app_main.create_app().router.on_startup[0]
+    with pytest.raises(RuntimeError, match="JWT_SECRET"):
+        startup()
+
+
 def test_openai_report_page_request_omits_kimi_only_options(monkeypatch):
     """OpenAI 视觉请求不得携带 Moonshot 专属 thinking 扩展字段。"""
 
