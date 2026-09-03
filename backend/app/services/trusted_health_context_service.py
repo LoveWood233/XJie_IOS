@@ -265,8 +265,7 @@ def _device_observations(db: Session, *, user_id: int) -> list[dict[str, Any]]:
                 TrustedDeviceProfileObservation.id.desc(),
             )
             .limit(100)
-            .distinct()
-        ).scalars().all()
+        ).scalars().unique().all()
     )
     return [
         {

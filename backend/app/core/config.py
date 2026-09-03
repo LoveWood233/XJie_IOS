@@ -30,6 +30,9 @@ OPENAI_IMAGE_CAPABLE_MODELS = frozenset(
 
 class Settings(BaseSettings):
     APP_ENV: str = "dev"
+    # Weak local-only credentials and plaintext reset codes require an explicit
+    # opt-in. Tests remain isolated and may use deterministic fixture secrets.
+    ALLOW_INSECURE_DEVELOPMENT: bool = False
     DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@db:5432/metabodash"
     REDIS_URL: str = "redis://redis:6379/0"
 
@@ -123,6 +126,27 @@ class Settings(BaseSettings):
     JWT_EXPIRES_MIN: int = 1440  # Legacy compat
     JWT_ACCESS_EXPIRES_MIN: int = 30
     JWT_REFRESH_EXPIRES_DAYS: int = 7
+
+    def allows_insecure_development_features(self) -> bool:
+        environment = self.APP_ENV.strip().lower()
+        return environment == "test" or (
+            environment in {"dev", "development"}
+            and self.ALLOW_INSECURE_DEVELOPMENT
+        )
+
+    def validate_auth_security_configuration(self) -> None:
+        """Fail startup unless JWT signing is safe outside explicit local dev."""
+
+        if self.allows_insecure_development_features():
+            return
+        secret = self.JWT_SECRET.encode("utf-8")
+        if len(secret) < 32 or self.JWT_SECRET.strip().lower() in {
+            "change_me",
+            "changeme",
+        }:
+            raise RuntimeError(
+                "JWT_SECRET must contain at least 32 UTF-8 bytes outside explicit local development"
+            )
 
     # Rate limiting
     LOGIN_RATE_LIMIT_PER_MIN: int = 10

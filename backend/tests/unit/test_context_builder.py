@@ -52,6 +52,21 @@ class FakeDB:
         else:
             return _FakeResult([])
 
+    class _NestedTransaction:
+        def __init__(self, db):
+            self.db = db
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, _exc, _traceback):
+            if exc_type is not None:
+                self.db.transaction_failed = False
+            return False
+
+    def begin_nested(self):
+        return self._NestedTransaction(self)
+
 
 def test_build_user_context(monkeypatch):
     now = datetime(2026, 2, 18, 12, 0, tzinfo=timezone.utc)
@@ -82,7 +97,11 @@ def test_build_user_context(monkeypatch):
 def test_trusted_context_failure_returns_no_health_values_from_fallback_paths(
     monkeypatch,
 ):
+    db = FakeDB([], [])
+    db.transaction_failed = False
+
     def unavailable(*_args, **_kwargs):
+        db.transaction_failed = True
         raise RuntimeError("trust store unavailable")
 
     def raw_health_fallback(*_args, **_kwargs):
@@ -95,14 +114,19 @@ def test_trusted_context_failure_returns_no_health_values_from_fallback_paths(
         raw_health_fallback,
         raising=False,
     )
+
+    def build_message_structure(*_args, **_kwargs):
+        assert db.transaction_failed is False
+        return {"health_fact_index": {"facts": []}}
+
     monkeypatch.setattr(
         context_builder,
         "build_message_structure",
-        lambda *_args, **_kwargs: {"health_fact_index": {"facts": []}},
+        build_message_structure,
     )
 
     context = context_builder.build_user_context(
-        FakeDB([], []),
+        db,
         user_id=1,
         trusted_health_consumer="daily_advice",
     )
