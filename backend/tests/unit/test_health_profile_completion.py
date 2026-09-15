@@ -38,6 +38,7 @@ from app.schemas.health_profile_trust import (
 from app.schemas.medication_trust import MedicationPlanConfirmIn, MedicationPlanStatusIn
 from app.services.health_profile_completion_service import sanitize_medication_payload
 from app.services.health_profile_trust_service import (
+    _supersede_device_candidates,
     build_profile,
     create_profile_goal,
     list_fact_revisions,
@@ -311,6 +312,90 @@ def test_profile_device_measurement_and_manual_edit_preserve_sources_and_conflic
             "SELECT DISTINCT health_profile_candidates" in statement
             for statement in executed_statements
         )
+
+
+def test_device_candidate_supersession_deduplicates_candidate_ids_before_loading_json_payload(
+    factory,
+):
+    """One candidate with two source links is superseded exactly once.
+
+    PostgreSQL cannot apply DISTINCT to a legacy ``json`` proposed_value column,
+    so the production query must deduplicate IDs rather than full candidate rows.
+    """
+    with factory() as db:
+        upsert_manual_fact(
+            db,
+            user_id=1,
+            payload=_fact_payload(
+                event_id="dedupe-before-json-load-manual",
+                fact_key="basic.weight",
+                category="basic",
+                value={"weight_kg": 70},
+            ),
+        )
+        indicator = UserIndicatorValue(
+            user_id=1,
+            indicator_name="weight",
+            value=72,
+            unit="kg",
+            measured_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+            source="apple_health",
+            source_metric="bodyWeight",
+            source_id="dedupe-before-json-load",
+            value_kind="numeric",
+        )
+        db.add(indicator)
+        db.flush()
+        observation = sync_device_profile_observation(
+            db, user_id=1, source="apple_health", indicator_value=indicator
+        )
+        candidate = db.scalar(
+            select(HealthProfileCandidate).where(
+                HealthProfileCandidate.review_status == "conflict"
+            )
+        )
+        assert observation is not None
+        assert candidate is not None
+
+        duplicate_source = HealthProfileSource(
+            user_id=1,
+            subject_user_id=1,
+            candidate_id=candidate.id,
+            source_type="device",
+            source_ref="duplicate-device-source-for-deduplication",
+            source_snapshot={"duplicate": True},
+            idempotency_key="duplicate-device-source-for-deduplication",
+        )
+        db.add(duplicate_source)
+        db.flush()
+        db.add(
+            HealthProfileDeviceSourceLink(
+                profile_source_id=duplicate_source.id,
+                device_observation_id=observation.id,
+                user_id=1,
+                subject_user_id=1,
+            )
+        )
+        db.flush()
+
+        _supersede_device_candidates(
+            db,
+            user_id=1,
+            subject_user_id=1,
+            observation_ids=[observation.id],
+        )
+        db.flush()
+
+        assert candidate.review_status == "superseded"
+        assert candidate.version == 2
+        assert db.scalar(
+            select(func.count())
+            .select_from(HealthProfileRevision)
+            .where(
+                HealthProfileRevision.candidate_id == candidate.id,
+                HealthProfileRevision.event_type == "supersede",
+            )
+        ) == 1
 
 
 def test_unconfirmed_or_conflicting_device_observation_never_reaches_any_ai_consumer(

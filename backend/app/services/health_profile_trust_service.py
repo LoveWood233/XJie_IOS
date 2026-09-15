@@ -1413,16 +1413,30 @@ def _supersede_device_candidates(
     candidates = list(
         db.execute(
             select(HealthProfileCandidate)
-            .join(HealthProfileSource, HealthProfileSource.candidate_id == HealthProfileCandidate.id)
-            .join(
-                HealthProfileDeviceSourceLink,
-                HealthProfileDeviceSourceLink.profile_source_id == HealthProfileSource.id,
-            )
             .where(
-                HealthProfileCandidate.user_id == user_id,
-                HealthProfileCandidate.subject_user_id == subject_user_id,
-                HealthProfileCandidate.review_status.in_(["pending_review", "conflict"]),
-                HealthProfileDeviceSourceLink.device_observation_id.in_(observation_ids),
+                HealthProfileCandidate.id.in_(
+                    select(HealthProfileCandidate.id)
+                    .join(
+                        HealthProfileSource,
+                        HealthProfileSource.candidate_id == HealthProfileCandidate.id,
+                    )
+                    .join(
+                        HealthProfileDeviceSourceLink,
+                        HealthProfileDeviceSourceLink.profile_source_id
+                        == HealthProfileSource.id,
+                    )
+                    .where(
+                        HealthProfileCandidate.user_id == user_id,
+                        HealthProfileCandidate.subject_user_id == subject_user_id,
+                        HealthProfileCandidate.review_status.in_(
+                            ["pending_review", "conflict"]
+                        ),
+                        HealthProfileDeviceSourceLink.device_observation_id.in_(
+                            observation_ids
+                        ),
+                    )
+                    .group_by(HealthProfileCandidate.id)
+                )
             )
         ).scalars().unique().all()
     )
@@ -1665,13 +1679,24 @@ def _reconcile_device_candidates_after_manual_fact(
     candidates = list(
         db.execute(
             select(HealthProfileCandidate)
-            .join(HealthProfileSource, HealthProfileSource.candidate_id == HealthProfileCandidate.id)
             .where(
-                HealthProfileCandidate.user_id == fact.user_id,
-                HealthProfileCandidate.subject_user_id == fact.subject_user_id,
-                HealthProfileCandidate.fact_key == fact.fact_key,
-                HealthProfileCandidate.review_status.in_(["pending_review", "conflict"]),
-                HealthProfileSource.source_type == "device",
+                HealthProfileCandidate.id.in_(
+                    select(HealthProfileCandidate.id)
+                    .join(
+                        HealthProfileSource,
+                        HealthProfileSource.candidate_id == HealthProfileCandidate.id,
+                    )
+                    .where(
+                        HealthProfileCandidate.user_id == fact.user_id,
+                        HealthProfileCandidate.subject_user_id == fact.subject_user_id,
+                        HealthProfileCandidate.fact_key == fact.fact_key,
+                        HealthProfileCandidate.review_status.in_(
+                            ["pending_review", "conflict"]
+                        ),
+                        HealthProfileSource.source_type == "device",
+                    )
+                    .group_by(HealthProfileCandidate.id)
+                )
             )
         ).scalars().unique().all()
     )
@@ -1860,15 +1885,23 @@ def refresh_candidates_after_observation_retraction(
     candidates = list(
         db.execute(
             select(HealthProfileCandidate)
-            .join(
-                HealthProfileSource,
-                HealthProfileSource.candidate_id == HealthProfileCandidate.id,
-            )
             .where(
-                HealthProfileCandidate.user_id == user_id,
-                HealthProfileCandidate.subject_user_id == subject_user_id,
-                HealthProfileCandidate.review_status.in_(["pending_review", "conflict"]),
-                HealthProfileSource.source_observation_id.in_(observation_ids),
+                HealthProfileCandidate.id.in_(
+                    select(HealthProfileCandidate.id)
+                    .join(
+                        HealthProfileSource,
+                        HealthProfileSource.candidate_id == HealthProfileCandidate.id,
+                    )
+                    .where(
+                        HealthProfileCandidate.user_id == user_id,
+                        HealthProfileCandidate.subject_user_id == subject_user_id,
+                        HealthProfileCandidate.review_status.in_(
+                            ["pending_review", "conflict"]
+                        ),
+                        HealthProfileSource.source_observation_id.in_(observation_ids),
+                    )
+                    .group_by(HealthProfileCandidate.id)
+                )
             )
         ).scalars().unique().all()
     )

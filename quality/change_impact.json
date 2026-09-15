@@ -1,5 +1,28 @@
 {
   "schema_version": 1,
+  "latest_change": {
+    "id": "2026-07-31-health-profile-json-distinct-repair",
+    "type": "bugfix_and_schema_normalization",
+    "root_cause": "HealthProfileCandidate entity queries used SELECT DISTINCT while selecting proposed_value from a legacy PostgreSQL json column. PostgreSQL json has no equality operator, so report-triggered device synchronization failed.",
+    "affected_domains": [
+      "backend_health_report_upload",
+      "backend_device_indicator_sync",
+      "backend_health_profile_trust",
+      "postgresql_migrations"
+    ],
+    "sibling_entry_scan": "Reviewed all HealthProfileCandidate entity queries using DISTINCT in health_profile_trust_service; all now deduplicate only integer candidate IDs in a subquery before loading entities.",
+    "invariants": [
+      "HEALTH-TRUST-001",
+      "BACKEND-CORE-001"
+    ],
+    "verification": [
+      "Focused unit regression for candidate supersession with duplicate device source links",
+      "Focused migration contract test for json-to-jsonb normalization",
+      "Fast regression gate",
+      "Shell syntax validation for the production expand-migration launcher wrapper"
+    ],
+    "remaining_risk": "The migration requires a controlled PostgreSQL deployment; SQLite unit tests cannot execute PostgreSQL JSON equality semantics."
+  },
   "change_id": "2026-09-03-production-backend-log-remediation",
   "change_type": "bugfix",
   "summary": "修复生产日志中健康画像 JSON DISTINCT 导致的设备同步、手工资料保存和聊天上下文 500，并阻止弱 JWT 密钥与明文验证码继续进入生产运行。",
