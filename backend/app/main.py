@@ -36,6 +36,7 @@ def create_app() -> FastAPI:
             validate_private_object_storage_configuration,
             validate_report_object_storage_configuration,
         )
+        settings.validate_auth_security_configuration()
         validate_private_object_storage_configuration(settings)
         validate_report_object_storage_configuration(settings)
         # 模型能力在接收报告前即校验；纯文本模型不能伪装成可用的异步 OCR。

@@ -30,15 +30,25 @@ def _request():
     )
 
 
-def test_account_lifecycle_delete_and_reregister_same_phone():
+def test_account_lifecycle_delete_and_reregister_same_phone(monkeypatch, caplog):
     auth._login_attempts.clear()
+    monkeypatch.setattr(
+        auth.settings,
+        "JWT_SECRET",
+        "unit-test-signing-secret-at-least-32-bytes",
+    )
     db = _db_session()
 
-    first_auth = auth.signup(
-        SignupRequest(phone="199 8000 0001", username=" tester ", password="UnitTestPassword!42"),
-        request=_request(),
-        db=db,
-    )
+    with caplog.at_level("INFO"):
+        first_auth = auth.signup(
+            SignupRequest(
+                phone="199 8000 0001",
+                username=" tester ",
+                password="UnitTestPassword!42",
+            ),
+            request=_request(),
+            db=db,
+        )
     first_user = db.execute(select(User).where(User.phone == "19980000001")).scalars().one()
 
     me = users.me(user_id=first_user.id, db=db)
@@ -65,6 +75,7 @@ def test_account_lifecycle_delete_and_reregister_same_phone():
             db=db,
         )
     assert login_error.value.status_code == 401
+    assert "19980000001" not in caplog.text
 
     second_auth = auth.signup(
         SignupRequest(phone="19980000001", username="tester2", password="UnitTestPassword!42"),
@@ -78,3 +89,26 @@ def test_account_lifecycle_delete_and_reregister_same_phone():
     ).scalars().all()
     assert len(active_users) == 1
     assert active_users[0].id != first_user.id
+
+
+def test_production_password_reset_fails_closed_without_logging_or_storing_code(
+    monkeypatch,
+    caplog,
+):
+    db = _db_session()
+    db.add(User(phone="19980000002", username="reset-user", password="x"))
+    db.commit()
+    auth._reset_request_window.clear()
+    monkeypatch.setattr(auth.settings, "APP_ENV", "production")
+    monkeypatch.setattr(auth.settings, "ALLOW_INSECURE_DEVELOPMENT", False)
+
+    with caplog.at_level("INFO"), pytest.raises(HTTPException) as error:
+        auth.password_reset_request(
+            auth.PasswordResetRequestIn(phone="19980000002"),
+            db=db,
+        )
+
+    assert error.value.status_code == 503
+    assert db.scalar(select(PasswordResetCode)) is None
+    assert "19980000002" not in caplog.text
+    assert "DEV-CODE" not in caplog.text

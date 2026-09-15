@@ -99,11 +99,15 @@ def build_user_context(
     trusted_context_loaded = uid is None
     if uid is not None:
         try:
-            trusted_health_context = build_trusted_health_context(
-                db,
-                user_id=uid,
-                consumer=declared_consumer,
-            )
+            # PostgreSQL marks the whole transaction as failed after a SQL error.
+            # Isolate the optional trust projection in a savepoint so fail-closed
+            # fallback can still persist the surrounding chat turn.
+            with db.begin_nested():
+                trusted_health_context = build_trusted_health_context(
+                    db,
+                    user_id=uid,
+                    consumer=declared_consumer,
+                )
             trusted_context_loaded = True
         except Exception as exc:  # noqa: BLE001
             # A trust-store outage must remove health context, never fall back

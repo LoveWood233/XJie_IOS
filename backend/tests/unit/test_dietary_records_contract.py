@@ -1484,10 +1484,16 @@ def test_photo_fingerprint_cache_is_tenant_scoped_and_history_edit_marks_summary
     tmp_path: Path,
 ):
     models, router, service, _migration = _contract_modules()
-    client, factory, headers, other_headers = _client(monkeypatch)
     from app.core.config import settings
     from app.services import object_storage
     from botocore.exceptions import ClientError
+
+    monkeypatch.setattr(
+        settings,
+        "JWT_SECRET",
+        "unit-test-signing-secret-at-least-32-bytes",
+    )
+    client, factory, headers, other_headers = _client(monkeypatch)
 
     shared_objects: dict[tuple[str, str], dict] = {}
     storage_instances: list[object] = []
